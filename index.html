@@ -319,7 +319,7 @@ tr.tot td{background:#F4F8FF;font-weight:700;border-top:2px solid var(--orange-m
   </div>
   <div class="sc-kicker">Báo cáo Vận hành · Operations Report</div>
   <h1 class="sc-title">Trung tâm Dữ liệu Vận hành<br><span>GHN — Vùng TNT</span></h1>
-  <p class="sc-desc">Operations Analytics · <b>Phan Văn Quân</b></p>
+  <p class="sc-desc">Operations Analytics · <b>Nguyễn Văn Doanh</b></p>
   <div class="sc-regions">
   <span>Phú Thọ</span><span>Vĩnh Phúc</span><span>Hòa Bình</span><span>Hà Nam</span><span>Nam Định</span><span>Ninh Bình</span>
   </div>
@@ -334,7 +334,7 @@ tr.tot td{background:#F4F8FF;font-weight:700;border-top:2px solid var(--orange-m
   <img class="tb-logo" src="https://cdn.hstatic.net/themes/200000472237/1001423864/14/logo.png?v=2874" alt="GiaoHangNhanh">
   <div class="tb-titles">
   <div class="tb-name">Báo cáo Vận hành — Vùng TNT</div>
-  <div class="tb-sub">Operations Analytics · Phan Văn Quân</div>
+  <div class="tb-sub">Operations Analytics · Nguyễn Văn Doanh</div>
   </div>
   <span class="tb-badge">TNT</span>
 </div>
@@ -633,11 +633,30 @@ function _valuesToRows(json){
   let maxc=0; vals.forEach(row=>{ if(row.length>maxc)maxc=row.length; });
   return vals.map(row=>{ const r=row.map(c=>c==null?'':String(c).trim()); while(r.length<maxc)r.push(''); return r; });
 }
+async function _resolveTitle(sheetId,wanted){
+  // Dò tên tab thật (bỏ qua dấu cách thừa / khác hoa-thường)
+  try{
+    const url=`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}?fields=sheets.properties(title)`;
+    let r=await fetch(url,{headers:{Authorization:'Bearer '+window._authToken}});
+    if(r.status===401){ try{ await getAccessToken(false); }catch(_){}; r=await fetch(url,{headers:{Authorization:'Bearer '+window._authToken}}); }
+    if(!r.ok)return null;
+    const j=await r.json(); const titles=(j.sheets||[]).map(s=>s.properties.title);
+    const norm=s=>(s||'').replace(/\s+/g,'').toLowerCase();
+    return titles.find(t=>norm(t)===norm(wanted))||null;
+  }catch(_){ return null; }
+}
 async function _apiValues(sheetId,range){
-  const url=`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${encodeURIComponent(range)}?majorDimension=ROWS&valueRenderOption=FORMATTED_VALUE`;
-  let r=await fetch(url,{headers:{Authorization:'Bearer '+window._authToken}});
-  if(r.status===401){ try{ await getAccessToken(false); }catch(_){}; r=await fetch(url,{headers:{Authorization:'Bearer '+window._authToken}}); }
-  if(!r.ok)throw new Error(`HTTP ${r.status}`);
+  const build=rg=>`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${encodeURIComponent(rg)}?majorDimension=ROWS&valueRenderOption=FORMATTED_VALUE`;
+  let r=await fetch(build(range),{headers:{Authorization:'Bearer '+window._authToken}});
+  if(r.status===401){ try{ await getAccessToken(false); }catch(_){}; r=await fetch(build(range),{headers:{Authorization:'Bearer '+window._authToken}}); }
+  if(r.status===400){
+    const real=await _resolveTitle(sheetId,range);
+    if(real&&real!==range){ r=await fetch(build(real),{headers:{Authorization:'Bearer '+window._authToken}}); }
+  }
+  if(!r.ok){
+    let detail=''; try{ const j=await r.json(); if(j&&j.error&&j.error.message)detail=' — '+j.error.message; }catch(_){}
+    throw new Error(`HTTP ${r.status}${detail}`);
+  }
   return _valuesToRows(await r.json());
 }
 const _gidNameCache={};
