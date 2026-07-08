@@ -626,61 +626,30 @@ h+=`</div>`;return h;
 /* ===== FETCH ===== */
 const SID='1CGUY5pxLZG5zoljPoVWv3Xnyn2XaLJdjEnOeYbCCJ0s';
 const AGING_SID='1SCD0hB0P9uOgpJ1HZWXTHT_cJOEKt53EUEkSsO_5Slg';
-// ===== ĐỌC SHEET BẰNG TÀI KHOẢN ĐÃ ĐĂNG NHẬP (Google Sheets API v4) =====
-// Không còn đọc công khai; sheet phải được chia sẻ cho @ghn.vn / @giaohangnhanh.vn.
-function _valuesToRows(json){
-  const vals=(json&&json.values)||[];
-  let maxc=0; vals.forEach(row=>{ if(row.length>maxc)maxc=row.length; });
-  return vals.map(row=>{ const r=row.map(c=>c==null?'':String(c).trim()); while(r.length<maxc)r.push(''); return r; });
-}
-async function _resolveTitle(sheetId,wanted){
-  // Dò tên tab thật (bỏ qua dấu cách thừa / khác hoa-thường)
-  try{
-    const url=`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}?fields=sheets.properties(title)`;
-    let r=await fetch(url,{headers:{Authorization:'Bearer '+window._authToken}});
-    if(r.status===401){ try{ await getAccessToken(false); }catch(_){}; r=await fetch(url,{headers:{Authorization:'Bearer '+window._authToken}}); }
-    if(!r.ok)return null;
-    const j=await r.json(); const titles=(j.sheets||[]).map(s=>s.properties.title);
-    const norm=s=>(s||'').replace(/\s+/g,'').toLowerCase();
-    return titles.find(t=>norm(t)===norm(wanted))||null;
-  }catch(_){ return null; }
-}
-async function _apiValues(sheetId,range){
-  const build=rg=>`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${encodeURIComponent(rg)}?majorDimension=ROWS&valueRenderOption=FORMATTED_VALUE`;
-  let r=await fetch(build(range),{headers:{Authorization:'Bearer '+window._authToken}});
-  if(r.status===401){ try{ await getAccessToken(false); }catch(_){}; r=await fetch(build(range),{headers:{Authorization:'Bearer '+window._authToken}}); }
-  if(r.status===400){
-    const real=await _resolveTitle(sheetId,range);
-    if(real&&real!==range){ r=await fetch(build(real),{headers:{Authorization:'Bearer '+window._authToken}}); }
-  }
-  if(!r.ok){
-    let detail=''; try{ const j=await r.json(); if(j&&j.error&&j.error.message)detail=' — '+j.error.message; }catch(_){}
-    throw new Error(`HTTP ${r.status}${detail}`);
-  }
-  return _valuesToRows(await r.json());
-}
-const _gidNameCache={};
-async function _gidToName(sheetId,gid){
-  if(!_gidNameCache[sheetId]){
-    const url=`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}?fields=sheets.properties(sheetId,title)`;
-    let r=await fetch(url,{headers:{Authorization:'Bearer '+window._authToken}});
-    if(r.status===401){ try{ await getAccessToken(false); }catch(_){}; r=await fetch(url,{headers:{Authorization:'Bearer '+window._authToken}}); }
-    if(!r.ok)throw new Error(`HTTP ${r.status}`);
-    const j=await r.json(); _gidNameCache[sheetId]={};
-    (j.sheets||[]).forEach(s=>{ _gidNameCache[sheetId][String(s.properties.sheetId)]=s.properties.title; });
-  }
-  return _gidNameCache[sheetId][String(gid)];
+// ===== ĐỌC SHEET QUA "THỦ KHO" (Apps Script) — sheet gốc riêng tư, chỉ Doanh + Quân =====
+// Dashboard KHÔNG đọc trực tiếp Sheet nữa. Nó gửi "thẻ đăng nhập" (token) + yêu cầu tới thủ kho;
+// thủ kho kiểm tra đúng @ghn.vn/@giaohangnhanh.vn rồi mới đọc Sheet giùm và trả số về.
+const PROXY_URL='https://script.google.com/macros/s/AKfycbwOlHLUQJKhghZHJzv3_IxlmXl-H0m2Ve_SnYygUm7uSDzxO56y3urJO8-50rovkKAgmA/exec';
+async function _proxyRead(sheetId, sel){
+  const url=()=>PROXY_URL+'?token='+encodeURIComponent(window._authToken||'')+'&sheetId='+encodeURIComponent(sheetId)+'&name='+encodeURIComponent(sel.name||'')+'&gid='+encodeURIComponent(sel.gid!=null?String(sel.gid):'');
+  const call=async()=>{ const r=await fetch(url()); let j=null; try{ j=await r.json(); }catch(_){}; return {r,j}; };
+  let {r,j}=await call();
+  if(j&&j.error==='auth'){ try{ await getAccessToken(false); }catch(_){}; ({r,j}=await call()); }
+  if(!r.ok) throw new Error(`HTTP ${r.status}`);
+  if(!j) throw new Error('Không đọc được phản hồi từ thủ kho');
+  if(j.error) throw new Error(j.error);
+  return j.rows||[];
 }
 async function fetchSheetById(sheetId,name,retry=2){
 for(let i=0;i<=retry;i++){
-  try{ return await _apiValues(sheetId,name); }
+  try{ return await _proxyRead(sheetId,{name}); }
   catch(e){ if(i===retry)throw e; await new Promise(res=>setTimeout(res,1500*(i+1))); }
 }
 }
 async function fetchSheet(name,retry=2){return fetchSheetById(SID,name,retry);}
 async function fetchSheetByGid(gid,retry=2){
 for(let i=0;i<=retry;i++){
-  try{ const nm=await _gidToName(SID,gid); if(!nm)throw new Error('gid not found'); return await _apiValues(SID,nm); }
+  try{ return await _proxyRead(SID,{gid}); }
   catch(e){ if(i===retry)throw e; await new Promise(res=>setTimeout(res,1500*(i+1))); }
 }
 }
@@ -4869,7 +4838,7 @@ await init();
 /* ===== ĐĂNG NHẬP GOOGLE — chỉ @ghn.vn / @giaohangnhanh.vn ===== */
 const AUTH_CLIENT_ID='903166235909-foh0qf1886pbfv5u6pj0qp60rm6ekmqh.apps.googleusercontent.com';
 const AUTH_DOMAINS=['ghn.vn','giaohangnhanh.vn'];
-const AUTH_SCOPE='openid email https://www.googleapis.com/auth/spreadsheets.readonly';
+const AUTH_SCOPE='openid email';
 window._authToken=null; window._authEmail='';
 let _tokenClient=null, _authStarted=false;
 function _authDomainOK(email){const d=((email||'').split('@')[1]||'').toLowerCase();return AUTH_DOMAINS.includes(d);}
