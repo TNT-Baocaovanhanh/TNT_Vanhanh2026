@@ -638,8 +638,17 @@ async function _proxyRead(sheetId, sel){
   if(!r.ok) throw new Error(`HTTP ${r.status}`);
   if(!j) throw new Error('Không đọc được phản hồi từ thủ kho');
   if(j.error) throw new Error(j.error);
+  // Phạm vi dữ liệu: AM chỉ nhận BC của mình → gắn badge "Đang xem khu vực của ..."
+  if(j.scope&&j.scope.type==='am'){
+    window._SCOPE=j.scope;
+    try{
+      const el=document.querySelector('.tb-sub');
+      if(el&&!window._scopeTagged){ window._scopeTagged=true; el.textContent='Đang xem: Khu vực của '+(j.scope.label||'bạn')+' · số "Toàn vùng" chỉ để so sánh'; }
+    }catch(_){}
+  }
   return j.rows||[];
 }
+function isScopedAm(){ return !!(window._SCOPE&&window._SCOPE.type==='am'); }
 async function fetchSheetById(sheetId,name,retry=2){
 for(let i=0;i<=retry;i++){
   try{ return await _proxyRead(sheetId,{name}); }
@@ -1900,6 +1909,12 @@ const TNT_TINH=['Hòa Bình','Phú Thọ','Vĩnh Phúc','Hà Nam','Nam Định',
 function ovDatesDesc(sheet,dateIdx){return[...new Set((sheet||[]).slice(1).map(r=>isoD(r[dateIdx])).filter(Boolean))].sort((a,b)=>b.localeCompare(a));}
 function ovGrand(sheet,dateIdx,date){return(sheet||[]).slice(1).find(r=>(r[0]||'').toLowerCase().includes('grand total')&&isoD(r[dateIdx])===date);}
 function ovOntime(sheet,date){ // AM-type ontime: name0,date1,vol2,pct3,cnt4
+// AM xem: ưu tiên dòng Grand Total (số vùng làm mốc so sánh); không có thì cộng như cũ
+if(isScopedAm()){
+  const g=(sheet||[]).slice(1).find(r=>(r[0]||'').toLowerCase().includes('grand total')&&isoD(r[1])===date);
+  if(g){const gv=Math.round(parseFloat(g[2])||0),gc=Math.round(parseFloat(g[4])||0);const gp=normOntimePct(g[3]);
+    return{vol:gv,ok:gc,pct:gp!=null?gp:(gv?gc/gv*100:0)};}
+}
 const rows=(sheet||[]).slice(1).filter(r=>(r[0]||'').trim()&&!(r[0]||'').toLowerCase().includes('grand total')&&isoD(r[1])===date);
 let v=0,c=0;rows.forEach(r=>{v+=Math.round(parseFloat(r[2])||0);c+=Math.round(parseFloat(r[4])||0);});
 return{vol:v,ok:c,pct:v?c/v*100:0};
@@ -2056,7 +2071,7 @@ function ovRegionN1N2HTML(gBC,odrBC,oprBC,fdBC,rotData,agRows,n1,n2){
 if(!n1||!n2)return'';
 const reg=ovRegionCopyData(gBC,odrBC,oprBC,fdBC,rotData,agRows,n1,n2);
 const ltk=ovLtkCopyDataN1N2();
-let h=`<div class="card" style="margin-top:18px"><div class="card-header"><div class="card-title"><div class="card-icon">📊</div>Tổng hợp chỉ số N-1 vs N-2 — Vùng TNT</div><div class="card-info">N-1: ${shortD(n1)} · N-2: ${shortD(n2)} · Bấm <strong>copy</strong> để dán báo cáo</div></div>`;
+let h=`<div class="card" style="margin-top:18px"><div class="card-header"><div class="card-title"><div class="card-icon">📊</div>Tổng hợp chỉ số N-1 vs N-2 — ${isScopedAm()?'Khu vực của bạn':'Vùng TNT'}</div><div class="card-info">N-1: ${shortD(n1)} · N-2: ${shortD(n2)} · Bấm <strong>copy</strong> để dán báo cáo</div></div>`;
 h+=monoCopyBox('CHỈ SỐ VẬN HÀNH THEO VÙNG (6 TỈNH)',reg.headers,reg.rows,'Gồm GTC · Ontime · FD · Aging · Rớt LC · Năng suất');
 if(ltk)h+=monoCopyBox('LEADTIME KCT — 3 KHO CHUYỂN TIẾP',ltk.headers,ltk.rows,`LT = Total_LT/Volume · N-1: ${shortD(ltk.n1)} vs N-2: ${shortD(ltk.n2)}`);
 h+=`</div>`;
@@ -2264,10 +2279,10 @@ return{headers,rows};
 function ovHlLlHTML(hl){
 if(!hl)return'';
 const ok=!hl.bad.length&&!hl.tinhBad.length;
-if(ok&&!hl.good.length)return`<div class="card" style="margin-top:18px;background:#F1F5F9;border-color:#E2E8F0"><div class="card-header" style="background:transparent;border-bottom:1px solid #E2E8F0"><div class="card-title"><div class="card-icon" style="background:#64748B">📊</div>Tóm tắt tốt / tệ — Vùng TNT</div><div class="card-info">N-1: ${shortD(hl.n1)} vs N-2: ${shortD(hl.n2)}</div></div><div style="padding:14px 18px;font-size:13px;color:var(--text-sub)">Chưa đủ dữ liệu so sánh.</div></div>`;
+if(ok&&!hl.good.length)return`<div class="card" style="margin-top:18px;background:#F1F5F9;border-color:#E2E8F0"><div class="card-header" style="background:transparent;border-bottom:1px solid #E2E8F0"><div class="card-title"><div class="card-icon" style="background:#64748B">📊</div>Tóm tắt tốt / tệ — ${isScopedAm()?'Khu vực của bạn':'Vùng TNT'}</div><div class="card-info">N-1: ${shortD(hl.n1)} vs N-2: ${shortD(hl.n2)}</div></div><div style="padding:14px 18px;font-size:13px;color:var(--text-sub)">Chưa đủ dữ liệu so sánh.</div></div>`;
 const copy=ovHlLlCopyRows(hl);
 const line=(items,ic,col)=>items.length?`<div style="font-size:12.5px;line-height:1.65;margin-bottom:8px"><span style="font-weight:800;color:${col}">${ic}</span> ${items.map(d=>`<span style="white-space:nowrap"><b>${d.lb}</b> ${ovFmtOV(d.v1,d.sfx,d.dec)} <span style="color:${col};font-weight:700">${d.dTxt}</span></span>`).join(' · ')}</div>`:'';
-let h=`<div class="card" style="margin-top:18px;background:${hl.bad.length?'#FFFBEB':'#F0FDF4'};border-color:${hl.bad.length?'#FDE68A':'#BBF7D0'}"><div class="card-header" style="background:transparent;border-bottom:1px solid ${hl.bad.length?'#FDE68A':'#BBF7D0'}"><div class="card-title"><div class="card-icon" style="background:${hl.bad.length?'#D97706':'#16A34A'}">${hl.bad.length?'⚖️':'✅'}</div>Tóm tắt tốt / tệ — Vùng TNT</div><div class="card-info">N-1: ${shortD(hl.n1)} vs N-2: ${shortD(hl.n2)} · Tổng hợp cả vùng</div></div>`;
+let h=`<div class="card" style="margin-top:18px;background:${hl.bad.length?'#FFFBEB':'#F0FDF4'};border-color:${hl.bad.length?'#FDE68A':'#BBF7D0'}"><div class="card-header" style="background:transparent;border-bottom:1px solid ${hl.bad.length?'#FDE68A':'#BBF7D0'}"><div class="card-title"><div class="card-icon" style="background:${hl.bad.length?'#D97706':'#16A34A'}">${hl.bad.length?'⚖️':'✅'}</div>Tóm tắt tốt / tệ — ${isScopedAm()?'Khu vực của bạn':'Vùng TNT'}</div><div class="card-info">N-1: ${shortD(hl.n1)} vs N-2: ${shortD(hl.n2)} · Tổng hợp cả vùng</div></div>`;
 h+=monoCopyBox('TỐT / TỆ — COPY BÁO CÁO',copy.headers,copy.rows,'Tóm tắt cấp vùng · không liệt kê từng BC');
 h+=`<div style="padding:0 16px 14px">`;
 h+=line(hl.good,'🟢 Tốt','var(--green)');
@@ -2362,6 +2377,11 @@ return ovOntime(amSheet,date);
 }
 function ovFDRateScoped(sheet,am){
 const dt=ovDatesDesc(sheet,1)[0]||'';
+// AM xem (không lọc riêng ai): ưu tiên dòng Grand Total = FD vùng làm mốc so sánh
+if(!am&&isScopedAm()){
+  const g=(sheet||[]).slice(1).find(r=>isGrandRow(r[0])&&isoD(r[1])===dt);
+  if(g){const gp=parsePct(g[3]);if(gp)return gp;}
+}
 const rows=(sheet||[]).slice(1).filter(r=>{
   if(!(r[0]||'').trim()||isGrandRow(r[0])||isoD(r[1])!==dt)return false;
   if(am&&(r[0]||'').trim()!==am)return false;
@@ -2431,7 +2451,10 @@ _unstSet.forEach(b=>{
 (rotData||[]).filter(r=>r.date===rotLatest&&(!am||r.am===am)&&(!bc||r.bc===bc)).forEach(r=>{if(tinhAgg[r.tinh])tinhAgg[r.tinh].rot++;});
 AG.rows.filter(r=>r.date===agLatest&&(!am||r.am===am)&&(!bc||r.bc===bc)).forEach(r=>{const t=bc2tinh[r.bc];if(t&&tinhAgg[t])tinhAgg[t].aging++;});
 const tinhCards=TNT_TINH.map(t=>{
-  const a=tinhAgg[t];const gtc=a.vol?a.ngtc/a.vol*100:0,gan=a.vol?a.ganW/a.vol:0;
+  const a=tinhAgg[t];
+  // AM xem: ẩn tỉnh không có dữ liệu của mình (đỡ rối, không hiện 5 thẻ trống)
+  if(isScopedAm()&&a.vol===0&&a.rot===0&&a.aging===0&&a.unstable===0)return'';
+  const gtc=a.vol?a.ngtc/a.vol*100:0,gan=a.vol?a.ganW/a.vol:0;
   let status,scol,sbg;
   if(a.vol===0){status='CHƯA CÓ DL';scol='#94A3B8';sbg='#F1F5F9';}
   else if(gtc<55||a.rot>0){status='VẤN ĐỀ';scol='#DC2626';sbg='#FEE2E2';}
@@ -4306,7 +4329,7 @@ const tableRows=(full.rows||[]).map(r=>[
   r.verdict==='tốt'?'🟢 tốt':r.verdict==='tệ'?'🔴 tệ':r.verdict
 ]);
 let h=`<div class="card" style="margin-bottom:18px;border-color:#BFDBFE;background:linear-gradient(180deg,#EFF6FF 0%,#fff 55%)">`;
-h+=`<div class="card-header" style="border-bottom:1px solid #BFDBFE"><div class="card-title"><div class="card-icon" style="background:#2563EB">📊</div>Thống kê N-1 vs N-2 — Toàn vùng TNT</div>`;
+h+=`<div class="card-header" style="border-bottom:1px solid #BFDBFE"><div class="card-title"><div class="card-icon" style="background:#2563EB">📊</div>Thống kê N-1 vs N-2 — ${isScopedAm()?'Khu vực của bạn':'Toàn vùng TNT'}</div>`;
 h+=`<div class="card-info">Mỗi chỉ số: ngày mới nhất sheet riêng vs ngày kề trước · GTC: <strong>${shortD(full.gtcN1)}</strong> · Tab AI → <strong>Tổng quan N-1</strong> để phân tích</div></div>`;
 h+=`<div style="padding:0 0 4px">`;
 if(tableRows.length)h+=monoCopyBox('BẢNG SO SÁNH NHANH',headers,tableRows,'Bảng tổng hợp chỉ số vùng');
