@@ -638,6 +638,8 @@ async function _proxyRead(sheetId, sel){
   if(!r.ok) throw new Error(`HTTP ${r.status}`);
   if(!j) throw new Error('Không đọc được phản hồi từ thủ kho');
   if(j.error) throw new Error(j.error);
+  // Số đếm toàn vùng của bảng thô (Aging/Rớt LC) — dùng cho bảng "vs Toàn vùng"
+  if(j.regionDaily){ window._REGION_RAW=window._REGION_RAW||{}; window._REGION_RAW[(sel.name||'').trim()||('gid:'+sel.gid)]=j.regionDaily; }
   // Phạm vi dữ liệu: AM chỉ nhận BC của mình → gắn badge "Đang xem khu vực của ..."
   if(j.scope&&j.scope.type==='am'){
     window._SCOPE=j.scope;
@@ -2390,6 +2392,54 @@ const rows=(sheet||[]).slice(1).filter(r=>{
 let tra=0,vol=0;rows.forEach(r=>{tra+=ovPf(r[4]);vol+=ovPf(r[2]);});
 return vol>0?tra/vol*100:0;
 }
+// ===== Bảng "Khu vực của bạn vs Toàn vùng" (chỉ hiện khi AM xem) =====
+function ovVsRegionHTML(R,rotData){
+if(!isScopedAm())return'';
+try{
+const fmtP=v=>v==null?'—':v.toFixed(1)+'%';
+// Gán/GTC: dòng thường = của mình, dòng Grand Total = vùng
+const gAM=R['GTC Total theo AM']||[];
+const latest=ovDatesDesc(gAM,1)[0]||'';
+let v=0,gW=0,cW=0;
+gAM.slice(1).forEach(r=>{if((r[0]||'').trim()&&!isGrandRow(r[0])&&isoD(r[1])===latest){const vol=parseFloat(r[2])||0;v+=vol;gW+=vol*(parseFloat(r[3])||0);cW+=vol*(parseFloat(r[4])||0);}});
+const ownGan=v?gW/v*100:null,ownGtc=v?cW/v*100:null;
+const gr=ovGrand(gAM,1,latest);
+const regGan=gr?(parseFloat(gr[3])||0)*100:null,regGtc=gr?(parseFloat(gr[4])||0)*100:null;
+// ODR/OPR
+const ont=sheet=>{const dt=ovDatesDesc(sheet,1)[0]||'';let v2=0,c2=0,g2=null;
+  (sheet||[]).slice(1).forEach(r=>{if(isoD(r[1])!==dt)return;if(isGrandRow(r[0])){g2=g2||r;return;}if((r[0]||'').trim()){v2+=Math.round(parseFloat(r[2])||0);c2+=Math.round(parseFloat(r[4])||0);}});
+  let reg=null;if(g2){const p=normOntimePct(g2[3]);const gv=Math.round(parseFloat(g2[2])||0);reg=p!=null?p:(gv?Math.round(parseFloat(g2[4])||0)/gv*100:null);}
+  return{own:v2?c2/v2*100:null,reg:reg};};
+const odr=ont(R['ODR TTS - AM']),opr=ont(R['OPR TTS - AM']);
+// FD
+const fdS=R['FD Total theo AM']||[];const fdt=ovDatesDesc(fdS,1)[0]||'';
+let tra=0,vol2=0,gf=null;
+fdS.slice(1).forEach(r=>{if(isoD(r[1])!==fdt)return;if(isGrandRow(r[0])){gf=gf||r;return;}if((r[0]||'').trim()){tra+=ovPf(r[4]);vol2+=ovPf(r[2]);}});
+const ownFd=vol2>0?tra/vol2*100:null,regFd=gf?parsePct(gf[3]):null;
+// Rớt LC & Aging: mình = đếm dòng đã lọc; vùng = thủ kho gửi kèm (regionDaily)
+const RR=window._REGION_RAW||{};
+const rotDates=[...new Set((rotData||[]).map(r=>r.date))].sort();const rl=rotDates[rotDates.length-1]||'';
+const ownRot=(rotData||[]).filter(r=>r.date===rl).length;
+const regRot=(RR['Rot_LC_Raw']||{})[rl]!=null?RR['Rot_LC_Raw'][rl]:null;
+const AGR=(window._AGING&&window._AGING.rows)||[];const agDs=[...new Set(AGR.map(r=>r.date))].sort();const al=agDs[agDs.length-1]||'';
+const ownAg=AGR.filter(r=>r.date===al).length;
+const regAg=(RR['Backupall']||{})[al]!=null?RR['Backupall'][al]:null;
+// Đánh giá
+const vRate=(own,reg,hiGood)=>{if(own==null||reg==null)return'—';const d=own-reg;if(Math.abs(d)<0.05)return'<span style="color:var(--text-sub)">≈ ngang vùng</span>';const good=hiGood?d>0:d<0;return`<span style="color:${good?'var(--green)':'var(--red)'};font-weight:700">${good?'🟢':'🔴'} ${good?'tốt hơn':'kém hơn'} vùng ${Math.abs(d).toFixed(1)}%</span>`;};
+const vCnt=(own,reg)=>{if(reg==null||!reg)return'—';return`<span style="color:var(--text-sub)">chiếm ${(own/reg*100).toFixed(1)}% toàn vùng</span>`;};
+const rowsD=[
+  {n:'Tỉ lệ gán giao',o:fmtP(ownGan),r:fmtP(regGan),v:vRate(ownGan,regGan,true)},
+  {n:'GTC Tổng',o:fmtP(ownGtc),r:fmtP(regGtc),v:vRate(ownGtc,regGtc,true)},
+  {n:'ODR TTS',o:fmtP(odr.own),r:fmtP(odr.reg),v:vRate(odr.own,odr.reg,true)},
+  {n:'OPR TTS',o:fmtP(opr.own),r:fmtP(opr.reg),v:vRate(opr.own,opr.reg,true)},
+  {n:'FD (tỷ lệ trả)',o:ownFd==null?'—':ownFd.toFixed(2)+'%',r:regFd==null?'—':regFd.toFixed(2)+'%',v:vRate(ownFd,regFd,false)},
+  {n:'Rớt LC',o:fmt(ownRot)+' đơn',r:regRot==null?'—':fmt(regRot)+' đơn',v:vCnt(ownRot,regRot)},
+  {n:'Aging > 5 ngày',o:fmt(ownAg)+' đơn',r:regAg==null?'—':fmt(regAg)+' đơn',v:vCnt(ownAg,regAg)}
+];
+const tr=rowsD.map(x=>`<tr><td style="padding:8px 14px;font-weight:600;border-bottom:1px solid var(--border)">${x.n}</td><td style="padding:8px 14px;text-align:right;font-weight:800;border-bottom:1px solid var(--border)">${x.o}</td><td style="padding:8px 14px;text-align:right;font-weight:700;color:var(--text-sub);border-bottom:1px solid var(--border)">${x.r}</td><td style="padding:8px 14px;text-align:right;font-size:12px;border-bottom:1px solid var(--border)">${x.v}</td></tr>`).join('');
+return`<div class="card" style="margin-top:14px;border-color:#BFDBFE"><div class="card-header" style="background:linear-gradient(135deg,#fff 0%,#EFF6FF 100%);border-bottom:1px solid #BFDBFE"><div class="card-title"><div class="card-icon" style="background:#2563EB">⚖️</div>Khu vực của bạn vs Toàn vùng${latest?` — ngày ${shortD(latest)}`:''}</div><div class="card-info">Số vùng làm mốc để biết mình đang đứng đâu</div></div><div class="table-wrap"><table style="min-width:560px"><thead><tr><th style="padding:8px 14px">CHỈ SỐ</th><th style="padding:8px 14px;text-align:right">KHU VỰC CỦA BẠN</th><th style="padding:8px 14px;text-align:right">TOÀN VÙNG</th><th style="padding:8px 14px;text-align:right">SO VỚI VÙNG</th></tr></thead><tbody>${tr}</tbody></table></div></div>`;
+}catch(_){return'';}
+}
 function buildOverviewPage(R,rotData){
 window._OV={R,rotData};
 const el=document.getElementById('p0');
@@ -2504,6 +2554,7 @@ const recHTML=hasRec?recSections.map(s=>`<div style="margin-bottom:12px"><div st
 const vhStats=ovVhFullStats();
 let h=ovVhQuickStatsHTML(vhStats);
 h+=`<div class="kpi-grid">${kAttr.map(k=>`<div class="kpi-card" style="border-top:none"><div class="kpi-ico" style="background:${k.bg}">${k.ic}</div><div class="kpi-label">${k.label}</div><div class="kpi-val" style="color:${k.c}">${k.val}</div><div style="font-size:10.5px;color:var(--text-sub);margin-top:4px">${k.tgt}</div>${k.d?`<div style="font-size:11px;font-weight:700;color:${k.d.col};margin-top:3px">${k.d.txt}</div>`:''}${k.sub?`<div style="display:flex;gap:6px;margin-top:8px">${k.sub.map(s=>`<div style="flex:1;background:#F8FAFC;border-radius:7px;padding:5px 4px;text-align:center"><div style="font-size:9px;font-weight:700;color:var(--text-sub)">${s.l}</div><div style="font-size:12px;font-weight:800;color:${s.c}">${s.v}</div></div>`).join('')}</div>`:''}</div>`).join('')}</div>`;
+h+=ovVsRegionHTML(R,rotData);
 window._OV_SUMMARY={n1:latest,n2:prev};
 h+=`<div style="display:flex;align-items:center;justify-content:space-between;margin:18px 0 12px"><div style="font-size:15px;font-weight:800">📍 6 tỉnh Vùng TNT${am||bc?` <span style="font-size:12px;color:var(--text-sub);font-weight:600">· ${bc||am}</span>`:''}</div><div style="font-size:11.5px;color:var(--text-sub)">Bấm tab phía trên để xem phân tích chi tiết từng chỉ số</div></div>`;
 h+=`<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:14px">${tinhCards}</div>`;
