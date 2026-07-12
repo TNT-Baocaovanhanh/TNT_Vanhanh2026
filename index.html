@@ -2502,8 +2502,8 @@ _unstSet.forEach(b=>{
 AG.rows.filter(r=>r.date===agLatest&&(!am||r.am===am)&&(!bc||r.bc===bc)).forEach(r=>{const t=bc2tinh[r.bc];if(t&&tinhAgg[t])tinhAgg[t].aging++;});
 const tinhCards=TNT_TINH.map(t=>{
   const a=tinhAgg[t];
-  // AM xem: ẩn tỉnh không có dữ liệu của mình (đỡ rối, không hiện 5 thẻ trống)
-  if(isScopedAm()&&a.vol===0&&a.rot===0&&a.aging===0&&a.unstable===0)return'';
+  // AM xem: ẩn tỉnh không có dữ liệu của mình (đỡ rối; không tính "bất ổn" để tránh thẻ trống lạc loài)
+  if(isScopedAm()&&a.vol===0&&a.rot===0&&a.aging===0)return'';
   const gtc=a.vol?a.ngtc/a.vol*100:0,gan=a.vol?a.ganW/a.vol:0;
   let status,scol,sbg;
   if(a.vol===0){status='CHƯA CÓ DL';scol='#94A3B8';sbg='#F1F5F9';}
