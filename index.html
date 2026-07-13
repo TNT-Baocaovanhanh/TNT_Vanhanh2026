@@ -299,13 +299,35 @@ tr.tot td{background:#F4F8FF;font-weight:700;border-top:2px solid var(--orange-m
   <div style="max-width:440px;width:100%;background:#fff;border-radius:18px;padding:36px 32px;box-shadow:0 20px 60px rgba(0,0,0,0.4);text-align:center">
     <img src="https://cdn.hstatic.net/themes/200000472237/1001423864/14/logo.png?v=2874" alt="GHN" style="height:40px;margin-bottom:18px">
     <div style="font-size:20px;font-weight:800;color:#0F172A;margin-bottom:6px">Báo cáo Vận hành — Vùng TNT</div>
-    <div style="font-size:13px;color:#64748B;line-height:1.6;margin-bottom:24px">Trang này chỉ dành cho nhân sự GHN.<br>Vui lòng đăng nhập bằng email <b>@ghn.vn</b> hoặc <b>@giaohangnhanh.vn</b>.</div>
-    <button id="authBtn" style="width:100%;padding:13px;border:none;border-radius:10px;background:#2563EB;color:#fff;font-size:15px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:10px">
-      <svg width="18" height="18" viewBox="0 0 48 48"><path fill="#fff" d="M24 9.5c3.9 0 6.6 1.7 8.1 3.1l5.9-5.8C34.6 3.1 29.8 1 24 1 14.6 1 6.5 6.4 2.6 14.3l6.9 5.4C11.3 13.7 17.1 9.5 24 9.5z" opacity=".0"/><path fill="#fff" d="M24 44c5.8 0 10.6-1.9 14.1-5.2l-6.9-5.4c-1.9 1.3-4.4 2.2-7.2 2.2-6.9 0-12.7-4.2-14.5-10.2l-6.9 5.4C6.5 41.6 14.6 44 24 44z"/></svg>
-      Đăng nhập bằng Google
-    </button>
+    <div style="font-size:13px;color:#64748B;line-height:1.6;margin-bottom:22px">Trang nội bộ GHN — đăng nhập bằng <b>mã nhân viên</b>, mã xác nhận gửi qua GTalk.</div>
+
+    <!-- Bước 1: nhập mã nhân viên -->
+    <div id="ssoStep1">
+      <div style="text-align:left;font-size:12px;font-weight:700;color:#334155;margin-bottom:6px">Mã nhân viên</div>
+      <input id="ssoEmp" type="text" inputmode="numeric" autocomplete="off" placeholder="Nhập mã nhân viên" style="width:100%;padding:13px 14px;border:1px solid #CBD5E1;border-radius:10px;font-size:15px;margin-bottom:14px" onkeydown="if(event.key==='Enter')_ssoReqOtp()">
+      <button id="ssoBtn1" onclick="_ssoReqOtp()" style="width:100%;padding:13px;border:none;border-radius:10px;background:#FF6C0A;color:#fff;font-size:15px;font-weight:700;cursor:pointer">Gửi mã đăng nhập</button>
+    </div>
+
+    <!-- Bước 2: nhập mã OTP -->
+    <div id="ssoStep2" style="display:none">
+      <div style="background:#FFF4ED;border:1px solid #FFD9B5;border-radius:10px;padding:9px 12px;font-size:13px;color:#9A3412;margin-bottom:14px">👤 Xin chào, <b id="ssoHello"></b> · mã xác nhận đã gửi vào GTalk của bạn</div>
+      <div style="text-align:left;font-size:12px;font-weight:700;color:#334155;margin-bottom:6px">Mã xác nhận (6 số)</div>
+      <input id="ssoOtp" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="––––––" style="width:100%;padding:13px 14px;border:1px solid #CBD5E1;border-radius:10px;font-size:22px;letter-spacing:8px;text-align:center;margin-bottom:14px;font-weight:700" onkeydown="if(event.key==='Enter')_ssoVerify()">
+      <button id="ssoBtn2" onclick="_ssoVerify()" style="width:100%;padding:13px;border:none;border-radius:10px;background:#FF6C0A;color:#fff;font-size:15px;font-weight:700;cursor:pointer">Đăng nhập</button>
+      <div style="display:flex;justify-content:space-between;margin-top:12px;font-size:12.5px">
+        <span onclick="_ssoBack()" style="color:#64748B;cursor:pointer">← Đổi mã NV</span>
+        <span id="ssoResend" onclick="_ssoReqOtp(true)" style="color:#FF6C0A;cursor:pointer;font-weight:600">Gửi lại mã</span>
+      </div>
+    </div>
+
     <div id="authMsg" style="font-size:12.5px;color:#DC2626;margin-top:16px;line-height:1.5;min-height:18px"></div>
-    <div style="font-size:11px;color:#94A3B8;margin-top:20px">🔒 Dữ liệu vận hành nội bộ · Operations Analytics</div>
+
+    <div style="display:flex;align-items:center;gap:10px;margin:20px 0 14px"><div style="flex:1;height:1px;background:#E2E8F0"></div><span style="font-size:11px;color:#94A3B8">hoặc</span><div style="flex:1;height:1px;background:#E2E8F0"></div></div>
+    <button id="authBtn" style="width:100%;padding:11px;border:1px solid #CBD5E1;border-radius:10px;background:#fff;color:#334155;font-size:13.5px;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px">
+      <svg width="16" height="16" viewBox="0 0 48 48"><path fill="#4285F4" d="M45.1 24.5c0-1.6-.1-3.1-.4-4.5H24v9h11.8c-.5 2.7-2 5-4.4 6.6v5.5h7.1c4.1-3.8 6.6-9.4 6.6-16.6z"/><path fill="#34A853" d="M24 46c5.9 0 10.9-2 14.5-5.3l-7.1-5.5c-2 1.3-4.5 2.1-7.4 2.1-5.7 0-10.5-3.8-12.2-9h-7.3v5.7C10.6 41.2 16.8 46 24 46z"/><path fill="#FBBC05" d="M11.8 28.3c-.4-1.3-.7-2.7-.7-4.3s.2-2.9.7-4.3v-5.7H4.5C3 17.1 2 20.4 2 24s1 6.9 2.5 9.7l7.3-5.4z"/><path fill="#EA4335" d="M24 10.7c3.2 0 6.1 1.1 8.4 3.3l6.3-6.3C34.9 4.1 29.9 2 24 2 16.8 2 10.6 6.8 7.8 13.7l7.3 5.7c1.7-5.2 6.5-8.7 12.2-8.7z"/></svg>
+      Đăng nhập bằng email @ghn.vn (Google)
+    </button>
+    <div style="font-size:11px;color:#94A3B8;margin-top:18px">🔒 Dữ liệu vận hành nội bộ · Operations Analytics</div>
   </div>
 </div>
 
@@ -631,10 +653,14 @@ const AGING_SID='1SCD0hB0P9uOgpJ1HZWXTHT_cJOEKt53EUEkSsO_5Slg';
 // thủ kho kiểm tra đúng @ghn.vn/@giaohangnhanh.vn rồi mới đọc Sheet giùm và trả số về.
 const PROXY_URL='https://script.google.com/macros/s/AKfycbwOlHLUQJKhghZHJzv3_IxlmXl-H0m2Ve_SnYygUm7uSDzxO56y3urJO8-50rovkKAgmA/exec';
 async function _proxyRead(sheetId, sel){
-  const url=()=>PROXY_URL+'?token='+encodeURIComponent(window._authToken||'')+'&sheetId='+encodeURIComponent(sheetId)+'&name='+encodeURIComponent(sel.name||'')+'&gid='+encodeURIComponent(sel.gid!=null?String(sel.gid):'');
+  const url=()=>PROXY_URL+'?stoken='+encodeURIComponent(window._stoken||'')+'&token='+encodeURIComponent(window._authToken||'')+'&sheetId='+encodeURIComponent(sheetId)+'&name='+encodeURIComponent(sel.name||'')+'&gid='+encodeURIComponent(sel.gid!=null?String(sel.gid):'');
   const call=async()=>{ const r=await fetch(url()); let j=null; try{ j=await r.json(); }catch(_){}; return {r,j}; };
   let {r,j}=await call();
-  if(j&&j.error==='auth'){ try{ await getAccessToken(false); }catch(_){}; ({r,j}=await call()); }
+  // Vé SSO hết hạn/lỗi → nếu đang dùng SSO thì bắt đăng nhập lại; nếu dùng Google thì thử refresh
+  if(j&&j.error==='auth'){
+    if(window._stoken){ _ssoLogout('Phiên đăng nhập đã hết hạn — vui lòng đăng nhập lại.'); throw new Error('auth'); }
+    try{ await getAccessToken(false); }catch(_){}; ({r,j}=await call());
+  }
   if(!r.ok) throw new Error(`HTTP ${r.status}`);
   if(!j) throw new Error('Không đọc được phản hồi từ thủ kho');
   if(j.error) throw new Error(j.error);
@@ -2932,13 +2958,15 @@ function buildAIPage(){
 const p12=document.getElementById('p12');
 const savedKey=localStorage.getItem('claudeApiKey')||'';
 p12.innerHTML=`<div class="page-header"><div class="page-title">✨ AI - Phân Tích Tổng Quan</div><div class="page-meta"><span class="tag tag-orange">🤖 Powered by Claude (Anthropic) · Dữ liệu từ các dashboard</span></div></div>
-<div class="card" style="margin-bottom:14px"><div class="card-header"><div class="card-title"><div class="card-icon">🔑</div>Claude API Key <span style="font-size:11px;font-weight:400;color:var(--text-sub)">(Anthropic — trả phí theo token)</span></div></div>
-<div style="padding:14px 18px;display:flex;gap:10px;align-items:center;flex-wrap:wrap">
-  <input type="password" id="groqKeyInput" value="${savedKey}" placeholder="sk-ant-..." style="flex:1;min-width:200px;padding:9px 12px;border-radius:8px;border:1px solid var(--border);font-size:13px">
+<div class="card" style="margin-bottom:14px"><div class="card-header"><div class="card-title"><div class="card-icon">🔑</div>AI dùng chung <span style="font-size:11px;font-weight:400;color:var(--text-sub)">— đã bật cho mọi tài khoản @ghn.vn, không cần nhập key</span></div></div>
+<div style="padding:12px 18px;font-size:12.5px;color:var(--text-main)">☁️ Hệ thống dùng <b>key chung của Vùng</b> (đặt an toàn phía máy chủ, có giới hạn lượt/ngày). Bạn chỉ cần bấm <b>Phân tích ngay</b>.</div>
+<details style="padding:0 18px 12px"><summary style="font-size:11.5px;color:var(--text-sub);cursor:pointer">Tùy chọn: dùng key cá nhân (chỉ khi muốn tách chi phí riêng)</summary>
+<div style="padding:10px 0;display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+  <input type="password" id="groqKeyInput" value="${savedKey}" placeholder="sk-ant-... (bỏ trống = dùng key chung)" style="flex:1;min-width:200px;padding:9px 12px;border-radius:8px;border:1px solid var(--border);font-size:13px">
   <button onclick="saveGroqKey()" style="background:var(--orange);color:#fff;border:none;padding:9px 18px;border-radius:8px;cursor:pointer;font-weight:600;font-size:13px">Lưu</button>
-  <span id="groqKeySaved" style="font-size:12px;color:#4ade80">${savedKey?'✅ Đã lưu':''}</span>
+  <span id="groqKeySaved" style="font-size:12px;color:#4ade80">${savedKey?'✅ Đang dùng key riêng':''}</span>
 </div>
-<div style="padding:0 18px 12px;font-size:11px;color:var(--text-sub)">Lấy key tại <a href="https://console.anthropic.com/settings/keys" target="_blank" style="color:var(--orange)">console.anthropic.com</a></div></div>
+<div style="font-size:11px;color:var(--text-sub)">Lấy key tại <a href="https://console.anthropic.com/settings/keys" target="_blank" style="color:var(--orange)">console.anthropic.com</a> · Xóa trống ô này + Lưu để quay lại key chung</div></details></div>
 <div class="card"><div class="card-header"><div class="card-title"><div class="card-icon">💬</div>Nội dung phân tích</div></div>
 <div style="padding:14px 18px">
   <div style="margin-bottom:8px;font-size:12px;font-weight:600;color:var(--text-sub)">Chế độ phân tích:</div>
@@ -4633,8 +4661,7 @@ function aiEnsureFlags(ds){
 return{canNang:ds==='canNang'||ds==='baton',aging:ds==='aging'||ds==='baton',rotLC:ds==='rotLC',baton:ds==='baton',hron:ds==='hron'||ds==='baton',ns:ds==='nangSuat'||ds==='baton',ltkct:ds==='ltkct'};
 }
 async function runAIAnalysis(){
-const key=localStorage.getItem('claudeApiKey')||'';
-if(!key){document.getElementById('aiStatus').textContent='⚠️ Chưa nhập Claude API Key';document.getElementById('groqKeyInput').focus();return;}
+const key=localStorage.getItem('claudeApiKey')||'';   // rỗng = dùng key CHUNG qua thủ kho (mặc định)
 const userQ=(document.getElementById('aiPromptArea').value||'').trim();
 if(!userQ){document.getElementById('aiStatus').textContent='⚠️ Vui lòng nhập nội dung';return;}
 const btn=document.getElementById('aiRunBtn');btn.disabled=true;btn.innerHTML='<span>⏳</span><span>Đang phân tích...</span>';
@@ -4779,9 +4806,22 @@ try{
   document.getElementById('aiStatus').textContent='';
 }catch(_){ctx=gatherDashboardData();}
 try{
-  const res=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'content-type':'application/json','x-api-key':key,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},body:JSON.stringify({model:'claude-sonnet-4-6',max_tokens:maxTokens,system:systemPrompt,messages:[{role:'user',content:`${scopeNote}\n\nDỮ LIỆU:\n${ctx}\n\nYÊU CẦU:\n${userQ}`}]})});
-  if(!res.ok){const e=await res.json().catch(()=>({}));throw new Error(e.error?.message||`HTTP ${res.status}`);}
-  const data=await res.json();const text=(data.content&&data.content[0]&&data.content[0].text)||'(Không có phản hồi)';
+  const userContent=`${scopeNote}\n\nDỮ LIỆU:\n${ctx}\n\nYÊU CẦU:\n${userQ}`;
+  let data;
+  if(key){ // key cá nhân → gọi thẳng Anthropic như trước
+    const res=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'content-type':'application/json','x-api-key':key,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},body:JSON.stringify({model:'claude-sonnet-4-6',max_tokens:maxTokens,system:systemPrompt,messages:[{role:'user',content:userContent}]})});
+    if(!res.ok){const e=await res.json().catch(()=>({}));throw new Error(e.error?.message||`HTTP ${res.status}`);}
+    data=await res.json();
+  }else{ // key CHUNG: gọi qua thủ kho (key nằm server, chỉ người đã đăng nhập dùng được)
+    const callAI=async()=>{const r=await fetch(PROXY_URL,{method:'POST',body:JSON.stringify({ai:1,stoken:window._stoken||'',token:window._authToken||'',system:systemPrompt,maxTokens:maxTokens,prompt:userContent})});try{return await r.json();}catch(_){return null;}};
+    data=await callAI();
+    if(data&&data.error==='auth'){try{await getAccessToken(false);}catch(_){}data=await callAI();}
+    if(!data)throw new Error('Không gọi được AI qua máy chủ — thử lại sau.');
+    if(data.error==='ai_not_configured')throw new Error('AI dùng chung chưa được kích hoạt (chưa gắn key) — báo anh Doanh nhé.');
+    if(data.error&&typeof data.error==='string')throw new Error(data.error);
+    if(data.type==='error')throw new Error((data.error&&data.error.message)||'AI lỗi');
+  }
+  const text=(data.content&&data.content[0]&&data.content[0].text)||'(Không có phản hồi)';
   const truncated=data.stop_reason==='max_tokens';
   document.getElementById('aiResultArea').innerHTML=md2html(text)+(truncated?'<div style="margin-top:12px;padding:10px 14px;background:#FEF3C7;border:1px solid #FCD34D;border-radius:8px;font-size:12.5px;color:#92400E">⚠️ Phản hồi có thể bị cắt do giới hạn độ dài. Thử chạy lại hoặc giảm số BC cần phân tích chi tiết.</div>':'');window._lastAIResult=text;
   try{const hist=aiLoadSaved();if(!hist.some(q=>q.text===userQ))localStorage.setItem(AI_Q_KEY,JSON.stringify([{text:userQ,ts:Date.now()},...hist].slice(0,50)));aiRenderSavedQuestions();}catch(_){}
@@ -4917,6 +4957,50 @@ window._authToken=null; window._authEmail='';
 let _tokenClient=null, _authStarted=false;
 function _authDomainOK(email){const d=((email||'').split('@')[1]||'').toLowerCase();return AUTH_DOMAINS.includes(d);}
 function _authSetMsg(t){const el=document.getElementById('authMsg');if(el)el.textContent=t||'';}
+
+/* ===== SSO ĐĂNG NHẬP BẰNG MÃ NHÂN VIÊN + OTP QUA GTALK ===== */
+window._stoken=null; window._ssoEmp='';
+function _ssoBusy(id,on,label){const b=document.getElementById(id);if(b){b.disabled=on;if(b.tagName==='BUTTON')b.textContent=on?'Đang xử lý…':label;}}
+function _stokenValid(st){try{const p=String(st).split('.');return p.length===3&&parseInt(p[1],10)>Date.now();}catch(_){return false;}}
+async function _ssoReqOtp(isResend){
+  const emp=(document.getElementById('ssoEmp').value||'').trim();
+  if(!/^\d{3,10}$/.test(emp)){_authSetMsg('Nhập đúng mã nhân viên (chỉ gồm số).');return;}
+  _authSetMsg(''); _ssoBusy('ssoBtn1',true,'Gửi mã đăng nhập');
+  try{
+    const j=await (await fetch(PROXY_URL+'?act=otp_req&empId='+encodeURIComponent(emp))).json();
+    if(j.error){_authSetMsg(j.error);}
+    else{ window._ssoEmp=emp; document.getElementById('ssoHello').textContent=j.name||('NV '+emp);
+      document.getElementById('ssoStep1').style.display='none'; document.getElementById('ssoStep2').style.display='block';
+      _authSetMsg(isResend?'✅ Đã gửi lại mã mới.':''); setTimeout(()=>{try{document.getElementById('ssoOtp').focus();}catch(_){}},120); }
+  }catch(e){_authSetMsg('Không kết nối được máy chủ. Thử lại.');}
+  _ssoBusy('ssoBtn1',false,'Gửi mã đăng nhập');
+}
+async function _ssoVerify(){
+  const otp=(document.getElementById('ssoOtp').value||'').trim();
+  if(!/^\d{6}$/.test(otp)){_authSetMsg('Mã xác nhận gồm 6 số.');return;}
+  _authSetMsg(''); _ssoBusy('ssoBtn2',true,'Đăng nhập');
+  try{
+    const j=await (await fetch(PROXY_URL+'?act=otp_verify&empId='+encodeURIComponent(window._ssoEmp||'')+'&otp='+encodeURIComponent(otp))).json();
+    if(j.error){_authSetMsg(j.error);}
+    else if(j.stoken){_ssoEnter(j.stoken);return;}
+    else _authSetMsg('Có lỗi, thử lại.');
+  }catch(e){_authSetMsg('Không kết nối được máy chủ. Thử lại.');}
+  _ssoBusy('ssoBtn2',false,'Đăng nhập');
+}
+function _ssoBack(){document.getElementById('ssoStep2').style.display='none';document.getElementById('ssoStep1').style.display='block';_authSetMsg('');}
+function _ssoEnter(stoken){
+  window._stoken=stoken; window._authToken=null;
+  try{localStorage.setItem('tnt_stoken',stoken);localStorage.removeItem('tnt_sso');}catch(_){}
+  const g=document.getElementById('authGate'); if(g)g.style.display='none';
+  initSplash(); init();
+}
+function _ssoLogout(msg){
+  window._stoken=null; try{localStorage.removeItem('tnt_stoken');}catch(_){}
+  const g=document.getElementById('authGate'); if(g)g.style.display='flex';
+  try{document.getElementById('ssoStep2').style.display='none';document.getElementById('ssoStep1').style.display='block';document.getElementById('ssoOtp').value='';}catch(_){}
+  if(msg)_authSetMsg(msg);
+}
+
 function getAccessToken(interactive){
   return new Promise((resolve,reject)=>{
     if(!_tokenClient){reject(new Error('auth chưa sẵn sàng'));return;}
@@ -4931,17 +5015,36 @@ async function _doLogin(){
     const u=await (await fetch('https://www.googleapis.com/oauth2/v3/userinfo',{headers:{Authorization:'Bearer '+window._authToken}})).json();
     if(!_authDomainOK(u.email)){ window._authToken=null; _authSetMsg('Email '+(u.email||'')+' không thuộc @ghn.vn / @giaohangnhanh.vn — bạn không có quyền xem báo cáo.'); return; }
     window._authEmail=u.email; _authSetMsg('');
+    try{localStorage.setItem('tnt_sso','1');}catch(_){}
     document.getElementById('authGate').style.display='none';
     initSplash();
     init();
   }catch(e){ _authSetMsg('Chưa đăng nhập được. Vui lòng thử lại.'); }
 }
+// SSO: đã đăng nhập lần trước → lần sau tự vào thẳng, không cần bấm nút
+async function _trySilentLogin(){
+  try{
+    await getAccessToken(false);
+    const u=await (await fetch('https://www.googleapis.com/oauth2/v3/userinfo',{headers:{Authorization:'Bearer '+window._authToken}})).json();
+    if(!_authDomainOK(u.email)){ window._authToken=null; return; }
+    window._authEmail=u.email;
+    document.getElementById('authGate').style.display='none';
+    initSplash();
+    init();
+  }catch(_){/* im lặng — hiện nút đăng nhập như thường */}
+}
 function initAuth(){
   if(_authStarted)return;
+  // Ưu tiên vé SSO mã NV còn hạn → vào thẳng, không cần chờ Google tải
+  let savedS=''; try{savedS=localStorage.getItem('tnt_stoken')||'';}catch(_){}
+  if(savedS&&_stokenValid(savedS)){ _authStarted=true; _ssoEnter(savedS); return; }
+  if(savedS){ try{localStorage.removeItem('tnt_stoken');}catch(_){} }   // vé hết hạn → dọn
   if(!(window.google&&google.accounts&&google.accounts.oauth2)){ setTimeout(initAuth,300); return; }
   _authStarted=true;
   _tokenClient=google.accounts.oauth2.initTokenClient({client_id:AUTH_CLIENT_ID,scope:AUTH_SCOPE,callback:()=>{}});
   const b=document.getElementById('authBtn'); if(b)b.onclick=_doLogin;
+  let wasIn=false; try{wasIn=localStorage.getItem('tnt_sso')==='1';}catch(_){}
+  if(wasIn)_trySilentLogin();
 }
 buildNav();
 nav('p0','g_ov');
