@@ -5050,5 +5050,91 @@ buildNav();
 nav('p0','g_ov');
 initAuth();
 </script>
+<!-- ===== BOX CHAT AI NỔI (góc dưới phải) ===== -->
+<style>
+#aiFab{position:fixed;right:22px;bottom:22px;width:58px;height:58px;border-radius:50%;background:linear-gradient(135deg,var(--orange),#3B82F6);color:#fff;display:flex;align-items:center;justify-content:center;font-size:26px;cursor:pointer;box-shadow:0 8px 24px rgba(37,99,235,.45);z-index:9000;transition:transform .15s;user-select:none}
+#aiFab:hover{transform:scale(1.08)}
+#aiFab .dot{position:absolute;top:2px;right:4px;width:12px;height:12px;background:#10B981;border:2px solid #fff;border-radius:50%}
+#aiChat{position:fixed;right:22px;bottom:22px;width:min(400px,calc(100vw - 28px));height:min(600px,calc(100vh - 90px));background:#fff;border-radius:16px;box-shadow:0 18px 60px rgba(15,23,42,.35);z-index:9001;display:none;flex-direction:column;overflow:hidden;border:1px solid var(--border)}
+#aiChatHead{background:linear-gradient(135deg,var(--orange),#3B82F6);color:#fff;padding:13px 16px;display:flex;align-items:center;justify-content:space-between;font-weight:700;font-size:14px}
+#aiChatHead .sub{font-size:11px;font-weight:400;opacity:.85;margin-top:2px}
+#aiChatHead .x{cursor:pointer;font-size:18px;opacity:.9;padding:0 4px}
+#aiChatBody{flex:1;overflow-y:auto;padding:14px;background:#F8FAFC;display:flex;flex-direction:column;gap:10px}
+.aiMsg{max-width:85%;padding:9px 13px;border-radius:14px;font-size:13px;line-height:1.55;word-wrap:break-word}
+.aiMsg.user{align-self:flex-end;background:var(--orange);color:#fff;border-bottom-right-radius:4px}
+.aiMsg.bot{align-self:flex-start;background:#fff;border:1px solid var(--border);color:var(--text-main);border-bottom-left-radius:4px}
+.aiMsg.bot p{margin:0 0 6px}.aiMsg.bot p:last-child{margin:0}.aiMsg.bot ul,.aiMsg.bot ol{margin:4px 0;padding-left:18px}.aiMsg.bot strong{font-weight:700}
+.aiMsg.typing{color:var(--text-sub);font-style:italic}
+#aiChatInputRow{display:flex;gap:8px;padding:10px;border-top:1px solid var(--border);background:#fff;align-items:flex-end}
+#aiChatInput{flex:1;border:1px solid var(--border);border-radius:12px;padding:9px 12px;font-size:13px;font-family:inherit;resize:none;max-height:110px;line-height:1.4}
+#aiChatInput:focus{outline:none;border-color:var(--orange)}
+#aiChatSendBtn{width:38px;height:38px;border:none;border-radius:50%;background:var(--orange);color:#fff;font-size:16px;cursor:pointer;flex-shrink:0}
+#aiChatSendBtn:disabled{opacity:.5;cursor:default}
+</style>
+<div id="aiFab" onclick="aiChatToggle()" title="Trợ lý AI Vùng TNT">✨<span class="dot"></span></div>
+<div id="aiChat">
+  <div id="aiChatHead">
+    <div><div>✨ Trợ lý AI — Vùng TNT</div><div class="sub">Hỏi gì cũng được · dùng chung, không cần key</div></div>
+    <span class="x" onclick="aiChatToggle()">✕</span>
+  </div>
+  <div id="aiChatBody"></div>
+  <div id="aiChatInputRow">
+    <textarea id="aiChatInput" rows="1" placeholder="Nhập câu hỏi… (Enter để gửi)"></textarea>
+    <button id="aiChatSendBtn" onclick="aiChatSend()">➤</button>
+  </div>
+</div>
+<script>
+let _chatMsgs=[], _chatBusy=false;
+function _aiEsc(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+function aiChatToggle(){
+  const c=document.getElementById('aiChat'), f=document.getElementById('aiFab');
+  const open=c.style.display!=='flex';
+  c.style.display=open?'flex':'none'; f.style.display=open?'none':'flex';
+  if(open){ if(!_chatMsgs.length) aiChatRender(); setTimeout(()=>{try{document.getElementById('aiChatInput').focus();}catch(_){}} ,120); }
+}
+function aiChatCtx(){ try{ return (typeof gatherDashboardData==='function')?String(gatherDashboardData()).slice(0,6000):''; }catch(_){ return ''; } }
+function aiChatRender(typing){
+  const b=document.getElementById('aiChatBody'); if(!b)return;
+  let h='';
+  if(!_chatMsgs.length) h+=`<div class="aiMsg bot">Chào bạn 👋 Mình là trợ lý AI của Vùng TNT.<br>Bạn hỏi gì cũng được — về số liệu vận hành trên dashboard, hay bất cứ chủ đề nào khác.</div>`;
+  _chatMsgs.forEach(m=>{ const cls=m.role==='user'?'user':'bot'; const body=(m.role==='assistant'&&typeof md2html==='function')?md2html(m.content):_aiEsc(m.content); h+=`<div class="aiMsg ${cls}">${body}</div>`; });
+  if(typing) h+=`<div class="aiMsg bot typing">Đang trả lời…</div>`;
+  b.innerHTML=h; b.scrollTop=b.scrollHeight;
+}
+async function aiChatSend(){
+  if(_chatBusy)return;
+  const inp=document.getElementById('aiChatInput'); const q=(inp.value||'').trim(); if(!q)return;
+  inp.value=''; inp.style.height='auto';
+  _chatMsgs.push({role:'user',content:q}); aiChatRender(true);
+  _chatBusy=true; document.getElementById('aiChatSendBtn').disabled=true;
+  const key=localStorage.getItem('claudeApiKey')||'';
+  const sys='Bạn là trợ lý AI thân thiện của hệ thống báo cáo vận hành Vùng TNT (GHN). Trả lời NGẮN GỌN, rõ ràng, bằng tiếng Việt. Trả lời MỌI câu hỏi của người dùng — cả về số liệu vận hành lẫn kiến thức chung. Khi hỏi về số liệu, ưu tiên dựa vào phần "DỮ LIỆU DASHBOARD" nếu được cung cấp; nếu dữ liệu không có thì nói rõ.';
+  const msgs=_chatMsgs.map((m,i)=>(i===0&&m.role==='user')?{role:'user',content:'[DỮ LIỆU DASHBOARD hiện tại]\n'+aiChatCtx()+'\n\n[Câu hỏi]\n'+m.content}:m);
+  let txt='(không có phản hồi)';
+  try{
+    let data=null;
+    if(key){
+      const r=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'content-type':'application/json','x-api-key':key,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},body:JSON.stringify({model:'claude-sonnet-4-6',max_tokens:2048,system:sys,messages:msgs})});
+      data=await r.json();
+    }else{
+      const call=async()=>{const ctrl=new AbortController();const t=setTimeout(()=>ctrl.abort(),90000);try{const r=await fetch(PROXY_URL,{method:'POST',signal:ctrl.signal,body:JSON.stringify({ai:1,stoken:window._stoken||'',token:window._authToken||'',system:sys,maxTokens:2048,messages:JSON.stringify(msgs)})});return await r.json();}catch(_){return null;}finally{clearTimeout(t);}};
+      data=await call();
+    }
+    if(!data) txt='⚠️ Không kết nối được máy chủ AI. Thử lại nhé.';
+    else if(data.error==='ai_not_configured') txt='⚠️ AI dùng chung chưa được bật (Vùng chưa gắn key). Báo anh Doanh nhé.';
+    else if(data.error==='auth') txt='⚠️ Phiên đăng nhập hết hạn — tải lại trang và đăng nhập lại.';
+    else if(typeof data.error==='string') txt='⚠️ '+data.error;
+    else if(data.type==='error') txt='⚠️ '+((data.error&&data.error.message)||'lỗi AI');
+    else txt=(data.content&&data.content[0]&&data.content[0].text)||txt;
+  }catch(e){ txt='⚠️ Lỗi: '+e.message; }
+  _chatMsgs.push({role:'assistant',content:txt});
+  _chatBusy=false; document.getElementById('aiChatSendBtn').disabled=false; aiChatRender();
+}
+document.addEventListener('DOMContentLoaded',()=>{
+  const inp=document.getElementById('aiChatInput'); if(!inp)return;
+  inp.addEventListener('input',()=>{inp.style.height='auto';inp.style.height=Math.min(inp.scrollHeight,110)+'px';});
+  inp.addEventListener('keydown',e=>{ if(e.key==='Enter'&&!e.shiftKey){ e.preventDefault(); aiChatSend(); } });
+});
+</script>
 </body>
 </html>
