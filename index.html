@@ -677,6 +677,24 @@ async function _proxyRead(sheetId, sel){
   return j.rows||[];
 }
 function isScopedAm(){ return !!(window._SCOPE&&window._SCOPE.type==='am'); }
+// Doc GOP nhieu tab 1 lan (giam 16 lan goi xuong 1) -> nhanh hon nhieu. Tra ve {name: rows}.
+async function _proxyReadBatch(sheetId, names){
+  const body=JSON.stringify({stoken:window._stoken||'',token:window._authToken||'',sheetId,names:JSON.stringify(names)});
+  const call=async()=>{ const r=await fetch(PROXY_URL,{method:'POST',body}); let j=null; try{j=await r.json();}catch(_){}; return {r,j}; };
+  let {r,j}=await call();
+  if(j&&j.error==='auth'){ if(window._stoken){ _ssoLogout('Phiên đăng nhập đã hết hạn — vui lòng đăng nhập lại.'); throw new Error('auth'); } try{await getAccessToken(false);}catch(_){}; ({r,j}=await call()); }
+  if(!r.ok) throw new Error('HTTP '+r.status);
+  if(!j||!j.results) throw new Error(j&&j.error?j.error:'batch_no_data');
+  const R={};
+  for(const nm in j.results){
+    const one=j.results[nm];
+    if(!one||one.error){ R[nm]=null; continue; }
+    if(one.regionDaily){ window._REGION_RAW=window._REGION_RAW||{}; window._REGION_RAW[(nm||'').trim()]=one.regionDaily; }
+    if(one.scope&&one.scope.type==='am'){ window._SCOPE=one.scope; try{ const el=document.querySelector('.tb-sub'); if(el&&!window._scopeTagged){ window._scopeTagged=true; el.textContent='Đang xem: Khu vực của '+(one.scope.label||'bạn')+' · số "Toàn vùng" chỉ để so sánh'; } }catch(_){} }
+    R[nm]=one.rows||[];
+  }
+  return R;
+}
 async function fetchSheetById(sheetId,name,retry=2){
 for(let i=0;i<=retry;i++){
   try{ return await _proxyRead(sheetId,{name}); }
@@ -4835,8 +4853,9 @@ function copyAIResult(){if(window._lastAIResult)navigator.clipboard.writeText(wi
 async function init(){
 const btn=document.getElementById('refreshBtn');btn.classList.add('spinning');btn.disabled=true;
 const sheetNames=AI_SHEET_NAMES;
-const R={};
-await Promise.all(sheetNames.map(async n=>{try{R[n]=await fetchSheet(n);}catch(e){R[n]=null;console.warn('Lỗi sheet',n,e.message);}}));
+let R={};
+try{ R=await _proxyReadBatch(SID, sheetNames); }        // ĐỌC GỘP 1 lần (nhanh)
+catch(e){ if(e&&e.message==='auth') throw e; console.warn('Đọc gộp lỗi, chuyển đọc lẻ:',e&&e.message); R={}; await Promise.all(sheetNames.map(async n=>{try{R[n]=await fetchSheet(n);}catch(_){R[n]=null;}})); }
 // Cache sheet cho AI (tránh fetch lại)
 sheetNames.forEach(n=>{if(R[n])window._SHEETCACHE[n]=R[n];});
 // Save global cache for AI
