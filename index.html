@@ -4809,7 +4809,7 @@ try{
   const userContent=`${scopeNote}\n\nDỮ LIỆU:\n${ctx}\n\nYÊU CẦU:\n${userQ}`;
   let data;
   if(key){ // key cá nhân → gọi thẳng Anthropic như trước
-    const res=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'content-type':'application/json','x-api-key':key,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},body:JSON.stringify({model:'claude-sonnet-4-6',max_tokens:maxTokens,system:systemPrompt,messages:[{role:'user',content:userContent}]})});
+    const res=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'content-type':'application/json','x-api-key':key,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},body:JSON.stringify({model:'claude-haiku-4-5-20251001',max_tokens:maxTokens,system:systemPrompt,messages:[{role:'user',content:userContent}]})});
     if(!res.ok){const e=await res.json().catch(()=>({}));throw new Error(e.error?.message||`HTTP ${res.status}`);}
     data=await res.json();
   }else{ // key CHUNG: gọi qua thủ kho (key nằm server, chỉ người đã đăng nhập dùng được)
@@ -5074,8 +5074,11 @@ initAuth();
 <div id="aiFab" onclick="aiChatToggle()" title="Trợ lý AI Vùng TNT">✨<span class="dot"></span></div>
 <div id="aiChat">
   <div id="aiChatHead">
-    <div><div>✨ Trợ lý AI — Vùng TNT</div><div class="sub">Hỏi gì cũng được · dùng chung, không cần key</div></div>
-    <span class="x" onclick="aiChatToggle()">✕</span>
+    <div><div>✨ Trợ lý AI — Vùng TNT</div><div class="sub">Hỏi gì cũng được · lịch sử tự lưu trên máy bạn</div></div>
+    <div style="display:flex;gap:12px;align-items:center;flex-shrink:0">
+      <span class="x" onclick="aiChatClear()" title="Xóa lịch sử trò chuyện">🗑</span>
+      <span class="x" onclick="aiChatToggle()">✕</span>
+    </div>
   </div>
   <div id="aiChatBody"></div>
   <div id="aiChatInputRow">
@@ -5084,13 +5087,24 @@ initAuth();
   </div>
 </div>
 <script>
-let _chatMsgs=[], _chatBusy=false;
+let _chatMsgs=[], _chatBusy=false, _chatUidCur=null;
 function _aiEsc(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+// ===== Lưu lịch sử trò chuyện riêng cho từng người (localStorage trên máy AM) =====
+function _chatUid(){
+  try{ var st=window._stoken||''; if(st){ var p=String(st).split('.'); if(p[0]) return 'emp_'+p[0]; } }catch(_){}
+  try{ if(window._authEmail) return 'g_'+window._authEmail; }catch(_){}
+  try{ if(window._ssoEmp) return 'emp_'+window._ssoEmp; }catch(_){}
+  return 'anon';
+}
+function _chatKey(){ return 'tnt_chat_'+_chatUid(); }
+function _chatLoad(){ var uid=_chatUid(); if(_chatUidCur===uid) return; _chatUidCur=uid; try{ var a=JSON.parse(localStorage.getItem(_chatKey())||'[]'); _chatMsgs=Array.isArray(a)?a:[]; }catch(_){ _chatMsgs=[]; } }
+function _chatSave(){ try{ localStorage.setItem(_chatKey(), JSON.stringify(_chatMsgs.slice(-40))); }catch(_){} }
+function aiChatClear(){ if(!confirm('Xóa toàn bộ lịch sử trò chuyện với trợ lý AI?'))return; _chatMsgs=[]; _chatSave(); aiChatRender(); }
 function aiChatToggle(){
   const c=document.getElementById('aiChat'), f=document.getElementById('aiFab');
   const open=c.style.display!=='flex';
   c.style.display=open?'flex':'none'; f.style.display=open?'none':'flex';
-  if(open){ if(!_chatMsgs.length) aiChatRender(); setTimeout(()=>{try{document.getElementById('aiChatInput').focus();}catch(_){}} ,120); }
+  if(open){ _chatLoad(); aiChatRender(); setTimeout(()=>{try{document.getElementById('aiChatInput').focus();}catch(_){}} ,120); }
 }
 function aiChatCtx(){ try{ return (typeof gatherDashboardData==='function')?String(gatherDashboardData()).slice(0,6000):''; }catch(_){ return ''; } }
 function aiChatRender(typing){
@@ -5105,19 +5119,20 @@ async function aiChatSend(){
   if(_chatBusy)return;
   const inp=document.getElementById('aiChatInput'); const q=(inp.value||'').trim(); if(!q)return;
   inp.value=''; inp.style.height='auto';
-  _chatMsgs.push({role:'user',content:q}); aiChatRender(true);
+  _chatMsgs.push({role:'user',content:q}); _chatSave(); aiChatRender(true);
   _chatBusy=true; document.getElementById('aiChatSendBtn').disabled=true;
   const key=localStorage.getItem('claudeApiKey')||'';
-  const sys='Bạn là trợ lý AI thân thiện của hệ thống báo cáo vận hành Vùng TNT (GHN). Trả lời NGẮN GỌN, rõ ràng, bằng tiếng Việt. Trả lời MỌI câu hỏi của người dùng — cả về số liệu vận hành lẫn kiến thức chung. Khi hỏi về số liệu, ưu tiên dựa vào phần "DỮ LIỆU DASHBOARD" nếu được cung cấp; nếu dữ liệu không có thì nói rõ.';
-  const msgs=_chatMsgs.map((m,i)=>(i===0&&m.role==='user')?{role:'user',content:'[DỮ LIỆU DASHBOARD hiện tại]\n'+aiChatCtx()+'\n\n[Câu hỏi]\n'+m.content}:m);
+  const sys='Bạn là trợ lý AI thân thiện của hệ thống báo cáo vận hành Vùng TNT (GHN). Trả lời NGẮN GỌN, rõ ràng, bằng tiếng Việt. Trả lời MỌI câu hỏi của người dùng — cả về số liệu vận hành lẫn kiến thức chung. Khi hỏi về số liệu, ưu tiên dựa vào phần "DỮ LIỆU DASHBOARD" bên dưới; nếu không có thì nói rõ.\n\n[DỮ LIỆU DASHBOARD hiện tại]\n'+aiChatCtx();
+  // Chỉ gửi 10 tin gần nhất (đỡ phình token) + đảm bảo bắt đầu bằng câu của người dùng
+  let msgs=_chatMsgs.slice(-10); while(msgs.length&&msgs[0].role!=='user')msgs=msgs.slice(1);
   let txt='(không có phản hồi)';
   try{
     let data=null;
     if(key){
-      const r=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'content-type':'application/json','x-api-key':key,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},body:JSON.stringify({model:'claude-sonnet-4-6',max_tokens:2048,system:sys,messages:msgs})});
+      const r=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'content-type':'application/json','x-api-key':key,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},body:JSON.stringify({model:'claude-haiku-4-5-20251001',max_tokens:1200,system:sys,messages:msgs})});
       data=await r.json();
     }else{
-      const call=async()=>{const ctrl=new AbortController();const t=setTimeout(()=>ctrl.abort(),90000);try{const r=await fetch(PROXY_URL,{method:'POST',signal:ctrl.signal,body:JSON.stringify({ai:1,stoken:window._stoken||'',token:window._authToken||'',system:sys,maxTokens:2048,messages:JSON.stringify(msgs)})});return await r.json();}catch(_){return null;}finally{clearTimeout(t);}};
+      const call=async()=>{const ctrl=new AbortController();const t=setTimeout(()=>ctrl.abort(),90000);try{const r=await fetch(PROXY_URL,{method:'POST',signal:ctrl.signal,body:JSON.stringify({ai:1,stoken:window._stoken||'',token:window._authToken||'',system:sys,maxTokens:1200,messages:JSON.stringify(msgs)})});return await r.json();}catch(_){return null;}finally{clearTimeout(t);}};
       data=await call();
     }
     if(!data) txt='⚠️ Không kết nối được máy chủ AI. Thử lại nhé.';
@@ -5127,7 +5142,7 @@ async function aiChatSend(){
     else if(data.type==='error') txt='⚠️ '+((data.error&&data.error.message)||'lỗi AI');
     else txt=(data.content&&data.content[0]&&data.content[0].text)||txt;
   }catch(e){ txt='⚠️ Lỗi: '+e.message; }
-  _chatMsgs.push({role:'assistant',content:txt});
+  _chatMsgs.push({role:'assistant',content:txt}); _chatSave();
   _chatBusy=false; document.getElementById('aiChatSendBtn').disabled=false; aiChatRender();
 }
 document.addEventListener('DOMContentLoaded',()=>{
