@@ -306,6 +306,10 @@ tr.tot td{background:#F4F8FF;font-weight:700;border-top:2px solid var(--orange-m
       <div style="text-align:left;font-size:12px;font-weight:700;color:#334155;margin-bottom:6px">Mã nhân viên</div>
       <input id="ssoEmp" type="text" inputmode="numeric" autocomplete="off" placeholder="Nhập mã nhân viên" style="width:100%;padding:13px 14px;border:1px solid #CBD5E1;border-radius:10px;font-size:15px;margin-bottom:14px" onkeydown="if(event.key==='Enter')_ssoReqOtp()">
       <button id="ssoBtn1" onclick="_ssoReqOtp()" style="width:100%;padding:13px;border:none;border-radius:10px;background:#FF6C0A;color:#fff;font-size:15px;font-weight:700;cursor:pointer">Gửi mã đăng nhập</button>
+      <label style="display:flex;align-items:center;gap:8px;margin-top:13px;font-size:12.5px;color:#475569;cursor:pointer;user-select:none">
+        <input id="ssoRemember" type="checkbox" checked style="width:15px;height:15px;accent-color:#FF6C0A;cursor:pointer">
+        Nhớ mã nhân viên trên máy này
+      </label>
     </div>
 
     <!-- Bước 2: nhập mã OTP -->
@@ -314,9 +318,24 @@ tr.tot td{background:#F4F8FF;font-weight:700;border-top:2px solid var(--orange-m
       <div style="text-align:left;font-size:12px;font-weight:700;color:#334155;margin-bottom:6px">Mã xác nhận (6 số)</div>
       <input id="ssoOtp" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="––––––" style="width:100%;padding:13px 14px;border:1px solid #CBD5E1;border-radius:10px;font-size:22px;letter-spacing:8px;text-align:center;margin-bottom:14px;font-weight:700" onkeydown="if(event.key==='Enter')_ssoVerify()">
       <button id="ssoBtn2" onclick="_ssoVerify()" style="width:100%;padding:13px;border:none;border-radius:10px;background:#FF6C0A;color:#fff;font-size:15px;font-weight:700;cursor:pointer">Đăng nhập</button>
+      <label id="ssoBioWrap" style="display:none;align-items:center;gap:8px;margin-top:13px;font-size:12.5px;color:#475569;cursor:pointer;user-select:none">
+        <input id="ssoBio" type="checkbox" checked style="width:15px;height:15px;accent-color:#FF6C0A;cursor:pointer">
+        <span>🔒 Bật đăng nhập nhanh bằng <b>vân tay / Face ID</b> trên thiết bị này (30 ngày)</span>
+      </label>
       <div style="display:flex;justify-content:space-between;margin-top:12px;font-size:12.5px">
         <span onclick="_ssoBack()" style="color:#64748B;cursor:pointer">← Đổi mã NV</span>
         <span id="ssoResend" onclick="_ssoReqOtp(true)" style="color:#FF6C0A;cursor:pointer;font-weight:600">Gửi lại mã</span>
+      </div>
+    </div>
+
+    <!-- Đăng nhập nhanh bằng vân tay (Touch ID) -->
+    <div id="ssoBioStep" style="display:none">
+      <div style="font-size:46px;margin:2px 0 8px">🔒</div>
+      <div style="font-size:13.5px;color:#475569;line-height:1.6;margin-bottom:18px">Chào mừng trở lại, <b id="ssoBioName" style="color:#0F172A"></b><br>Dùng vân tay / Face ID để đăng nhập nhanh.</div>
+      <button id="ssoBioBtn" onclick="_bioLogin()" style="width:100%;padding:14px;border:none;border-radius:10px;background:#FF6C0A;color:#fff;font-size:15px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px">👆 Đăng nhập bằng vân tay / Face ID</button>
+      <div style="display:flex;justify-content:center;gap:16px;margin-top:14px;font-size:12.5px">
+        <span onclick="_bioForget()" style="color:#64748B;cursor:pointer">Dùng mã nhân viên</span>
+        <span onclick="_bioDisable()" style="color:#94A3B8;cursor:pointer">Tắt vân tay máy này</span>
       </div>
     </div>
 
@@ -5035,6 +5054,64 @@ function _authSetMsg(t){const el=document.getElementById('authMsg');if(el)el.tex
 window._stoken=null; window._ssoEmp='';
 function _ssoBusy(id,on,label){const b=document.getElementById(id);if(b){b.disabled=on;if(b.tagName==='BUTTON')b.textContent=on?'Đang xử lý…':label;}}
 function _stokenValid(st){try{const p=String(st).split('.');return p.length===3&&parseInt(p[1],10)>Date.now();}catch(_){return false;}}
+// ===== NHỚ MÃ + ĐĂNG NHẬP VÂN TAY (Touch ID qua WebAuthn) =====
+function _bufToB64(buf){let s='';const a=new Uint8Array(buf);for(let i=0;i<a.length;i++)s+=String.fromCharCode(a[i]);return btoa(s);}
+function _b64ToBuf(b64){const s=atob(b64);const a=new Uint8Array(s.length);for(let i=0;i<s.length;i++)a[i]=s.charCodeAt(i);return a.buffer;}
+function _prefillEmp(){try{const last=localStorage.getItem('tnt_lastEmp')||'';const el=document.getElementById('ssoEmp');if(el&&last&&!el.value)el.value=last;}catch(_){}}
+async function _bioCan(){try{return !!(window.PublicKeyCredential&&navigator.credentials&&navigator.credentials.create)&&await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable();}catch(_){return false;}}
+function _bioClear(){try{localStorage.removeItem('tnt_bioCred');localStorage.removeItem('tnt_trusted');localStorage.removeItem('tnt_bioEmp');}catch(_){}}
+async function _bioEnroll(empId,trustedToken){
+  try{
+    if(!trustedToken||!window.PublicKeyCredential||!navigator.credentials||!navigator.credentials.create)return false;
+    const cred=await navigator.credentials.create({publicKey:{
+      challenge:crypto.getRandomValues(new Uint8Array(32)),
+      rp:{name:'GHN TNT — Vận hành'},
+      user:{id:new TextEncoder().encode('emp_'+(empId||'u')),name:'NV '+(empId||''),displayName:'NV '+(empId||'')},
+      pubKeyCredParams:[{type:'public-key',alg:-7},{type:'public-key',alg:-257}],
+      authenticatorSelection:{authenticatorAttachment:'platform',userVerification:'required'},
+      timeout:60000,attestation:'none'
+    }});
+    if(!cred||!cred.rawId)return false;
+    localStorage.setItem('tnt_bioCred',_bufToB64(cred.rawId));
+    localStorage.setItem('tnt_trusted',trustedToken);
+    localStorage.setItem('tnt_bioEmp',String(empId||''));
+    return true;
+  }catch(e){return false;}
+}
+function _showBioLogin(){
+  try{
+    document.getElementById('ssoStep1').style.display='none';
+    document.getElementById('ssoStep2').style.display='none';
+    document.getElementById('ssoBioStep').style.display='block';
+    let emp='';try{emp=localStorage.getItem('tnt_bioEmp')||'';}catch(_){}
+    document.getElementById('ssoBioName').textContent=emp?('NV '+emp):'bạn';
+    const g=document.getElementById('authGate');if(g)g.style.display='flex';
+  }catch(_){}
+}
+async function _bioLogin(){
+  let credId='',trusted='';
+  try{credId=localStorage.getItem('tnt_bioCred')||'';trusted=localStorage.getItem('tnt_trusted')||'';}catch(_){}
+  if(!credId||!trusted){_bioForget();return;}
+  if(!_stokenValid(trusted)){_bioClear();_authSetMsg('Đăng nhập vân tay đã hết hạn (30 ngày) — vui lòng đăng nhập lại bằng mã.');_bioForget();return;}
+  _authSetMsg('');_ssoBusy('ssoBioBtn',true,'👆 Đăng nhập bằng vân tay / Face ID');
+  try{
+    await navigator.credentials.get({publicKey:{
+      challenge:crypto.getRandomValues(new Uint8Array(32)),
+      allowCredentials:[{type:'public-key',id:_b64ToBuf(credId)}],
+      userVerification:'required',timeout:60000
+    }});
+    _ssoEnter(trusted);return;   // sinh trắc đúng → vào bằng vé tin cậy 30 ngày
+  }catch(e){_authSetMsg('Chưa xác thực được vân tay / Face ID. Thử lại hoặc dùng mã nhân viên.');}
+  _ssoBusy('ssoBioBtn',false,'👆 Đăng nhập bằng vân tay / Face ID');
+}
+function _bioForget(){
+  try{document.getElementById('ssoBioStep').style.display='none';document.getElementById('ssoStep2').style.display='none';document.getElementById('ssoStep1').style.display='block';}catch(_){}
+  _prefillEmp();_authSetMsg('');
+}
+function _bioDisable(){
+  if(!confirm('Tắt đăng nhập vân tay trên máy này? Lần sau bạn sẽ đăng nhập lại bằng mã nhân viên.'))return;
+  _bioClear();_bioForget();
+}
 async function _ssoReqOtp(isResend){
   const emp=(document.getElementById('ssoEmp').value||'').trim();
   if(!/^\d{3,10}$/.test(emp)){_authSetMsg('Nhập đúng mã nhân viên (chỉ gồm số).');return;}
@@ -5043,7 +5120,9 @@ async function _ssoReqOtp(isResend){
     const j=await (await fetch(PROXY_URL+'?act=otp_req&empId='+encodeURIComponent(emp))).json();
     if(j.error){_authSetMsg(j.error);}
     else{ window._ssoEmp=emp; document.getElementById('ssoHello').textContent=j.name||('NV '+emp);
+      try{ if(document.getElementById('ssoRemember')?.checked) localStorage.setItem('tnt_lastEmp',emp); else localStorage.removeItem('tnt_lastEmp'); }catch(_){}
       document.getElementById('ssoStep1').style.display='none'; document.getElementById('ssoStep2').style.display='block';
+      _bioCan().then(ok=>{ const w=document.getElementById('ssoBioWrap'); if(w) w.style.display=ok?'flex':'none'; });   // chỉ hiện ô vân tay nếu máy hỗ trợ
       _authSetMsg(isResend?'✅ Đã gửi lại mã mới.':''); setTimeout(()=>{try{document.getElementById('ssoOtp').focus();}catch(_){}},120); }
   }catch(e){_authSetMsg('Không kết nối được máy chủ. Thử lại.');}
   _ssoBusy('ssoBtn1',false,'Gửi mã đăng nhập');
@@ -5051,11 +5130,16 @@ async function _ssoReqOtp(isResend){
 async function _ssoVerify(){
   const otp=(document.getElementById('ssoOtp').value||'').trim();
   if(!/^\d{6}$/.test(otp)){_authSetMsg('Mã xác nhận gồm 6 số.');return;}
+  const bw=document.getElementById('ssoBioWrap');
+  const wantBio=!!(bw&&bw.style.display!=='none'&&document.getElementById('ssoBio')?.checked);
   _authSetMsg(''); _ssoBusy('ssoBtn2',true,'Đăng nhập');
   try{
-    const j=await (await fetch(PROXY_URL+'?act=otp_verify&empId='+encodeURIComponent(window._ssoEmp||'')+'&otp='+encodeURIComponent(otp))).json();
+    const j=await (await fetch(PROXY_URL+'?act=otp_verify&empId='+encodeURIComponent(window._ssoEmp||'')+'&otp='+encodeURIComponent(otp)+(wantBio?'&remember=1':''))).json();
     if(j.error){_authSetMsg(j.error);}
-    else if(j.stoken){_ssoEnter(j.stoken);return;}
+    else if(j.stoken){
+      if(wantBio&&j.trusted){ _authSetMsg('Xác nhận vân tay / Face ID để bật đăng nhập nhanh cho lần sau…'); await _bioEnroll(window._ssoEmp,j.trusted); }
+      _ssoEnter(j.stoken);return;
+    }
     else _authSetMsg('Có lỗi, thử lại.');
   }catch(e){_authSetMsg('Không kết nối được máy chủ. Thử lại.');}
   _ssoBusy('ssoBtn2',false,'Đăng nhập');
@@ -5106,9 +5190,22 @@ async function _trySilentLogin(){
     init();
   }catch(_){/* im lặng — hiện nút đăng nhập như thường */}
 }
+function _wireGoogleBtn(){
+  try{
+    if(!(window.google&&google.accounts&&google.accounts.oauth2)){ setTimeout(_wireGoogleBtn,400); return; }
+    if(!_tokenClient) _tokenClient=google.accounts.oauth2.initTokenClient({client_id:AUTH_CLIENT_ID,scope:AUTH_SCOPE,callback:()=>{}});
+    const b=document.getElementById('authBtn'); if(b)b.onclick=_doLogin;
+  }catch(_){}
+}
 function initAuth(){
   if(_authStarted)return;
-  // Ưu tiên vé SSO mã NV còn hạn → vào thẳng, không cần chờ Google tải
+  _prefillEmp();   // nhớ mã: điền sẵn mã nhân viên lần trước
+  // Đã bật vân tay + vé tin cậy 30 ngày còn hạn → yêu cầu Touch ID (KHÔNG tự vào)
+  let trusted='',cred='';
+  try{trusted=localStorage.getItem('tnt_trusted')||'';cred=localStorage.getItem('tnt_bioCred')||'';}catch(_){}
+  if(cred&&trusted&&!_stokenValid(trusted)){ _bioClear(); cred=''; }   // vé tin cậy hết hạn → xoá vân tay
+  if(trusted&&cred&&_stokenValid(trusted)){ _authStarted=true; _showBioLogin(); _wireGoogleBtn(); return; }
+  // Không có vân tay → vé phiên 12h còn hạn thì vào thẳng (như cũ)
   let savedS=''; try{savedS=localStorage.getItem('tnt_stoken')||'';}catch(_){}
   if(savedS&&_stokenValid(savedS)){ _authStarted=true; _ssoEnter(savedS); return; }
   if(savedS){ try{localStorage.removeItem('tnt_stoken');}catch(_){} }   // vé hết hạn → dọn
