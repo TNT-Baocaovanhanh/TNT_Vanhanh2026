@@ -4585,6 +4585,55 @@ if(needLTKCT&&!window._LTKCT?.rows?.length){
 }
 if(jobs.length)await Promise.all(jobs);
 }
+// Suy ra Tỉnh từ TÊN Bưu Cục: mã tiền tố "(VPH)…" hoặc hậu tố "…-Hoà Bình".
+function bcTinhFromName(name){
+  name=String(name||'');
+  const CODES={VPH:'Vĩnh Phúc',HNA:'Hà Nam',NDI:'Nam Định',NBI:'Ninh Bình',HBI:'Hòa Bình',PTH:'Phú Thọ'};
+  const m=name.match(/^\(([A-ZĐ]+)\)/); if(m&&CODES[m[1]])return CODES[m[1]];
+  const PROVS=['Vĩnh Phúc','Hà Nam','Nam Định','Ninh Bình','Hoà Bình','Hòa Bình','Phú Thọ'];
+  for(let i=0;i<PROVS.length;i++){ if(name.indexOf(PROVS[i])>=0) return PROVS[i]==='Hoà Bình'?'Hòa Bình':PROVS[i]; }
+  return '';
+}
+// Liệt kê số liệu TỪNG BƯU CỤC (ngày mới nhất, kèm Tỉnh/AM/so N-7) cho AI trả lời câu hỏi theo BC/Tỉnh/AM. Dò cột theo TÊN header (bền vững).
+function aiBCBlock(){
+try{
+  const D=window._D||{}; const out=[];
+  const iso=s=>{const m=String(s||'').match(/\d{4}-\d{2}-\d{2}/);return m?m[0]:'';};
+  const dnum=s=>{const p=iso(s).split('-');return p.length===3?(new Date(+p[0],+p[1]-1,+p[2])).getTime():0;};
+  function block(rows,cfg){
+    if(!rows||rows.length<2)return;
+    const H=rows[0].map(h=>String(h||'').trim().toLowerCase());
+    const find=kw=>{for(let i=0;i<H.length;i++){if(kw.some(k=>H[i]===k||H[i].includes(k)))return i;}return -1;};
+    const bcC=find(['bưu cục']),dC=find(['ngày']),vC=find(cfg.valKw),volC=cfg.volKw?find(cfg.volKw):-1,amC=find(['am']);
+    if(bcC<0||dC<0||vC<0)return;
+    const dates=[...new Set(rows.slice(1).map(r=>iso(r[dC])).filter(Boolean))].sort();
+    const n1=dates[dates.length-1];if(!n1)return;
+    // N-7: ngày gần nhất cách N-1 tối thiểu 6 ngày (để so xu hướng tuần)
+    const n1t=dnum(n1); let n7=''; for(let i=dates.length-1;i>=0;i--){ if(n1t-dnum(dates[i])>=6*864e5){ n7=dates[i]; break; } }
+    const prev={}; if(n7) rows.slice(1).forEach(r=>{ if(iso(r[dC])===n7){ const b=String(r[bcC]||'').trim(); if(b) prev[b]=parseFloat(r[vC])||0; } });
+    let items=rows.slice(1).filter(r=>iso(r[dC])===n1&&String(r[bcC]||'').trim()).map(r=>{
+      const bc=String(r[bcC]).trim(); let am=amC>=0?String(r[amC]||'').trim():''; if(am==='null'||am==='#N/A')am='';
+      return {bc,tinh:bcTinhFromName(bc),am,v:parseFloat(r[vC])||0,vol:volC>=0?(parseFloat(r[volC])||0):null,p:(n7&&prev[bc]!=null)?prev[bc]:null};
+    });
+    items.sort((a,b)=>b.v-a.v);
+    out.push(`\n### ${cfg.label} theo BƯU CỤC — ${shortD(n1)}${n7?(' · so N-7 '+shortD(n7)):''} — ${items.length} BC, xếp CAO→THẤP:`);
+    items.forEach(it=>{
+      const tag=[it.am,it.tinh].filter(Boolean).join('·');
+      let s=`  ${it.bc}`+(tag?` [${tag}]`:'')+`: ${(it.v*100).toFixed(2)}%`;
+      if(it.vol!=null) s+=` (Vol ${(it.vol*100).toFixed(2)}%)`;
+      if(it.p!=null){ const d=(it.v-it.p)*100; s+=` | N-7 ${(it.p*100).toFixed(2)}% ${d>=0?'↑':'↓'}${Math.abs(d).toFixed(2)}`; }
+      out.push(s);
+    });
+  }
+  block(D.gtcTotalBC,{label:'GTC Total (%GTC · thấp=tệ)',valKw:['tỉ lệ gtc','%gtc','gtc']});
+  block(D.gtcTTSBC,{label:'GTC TTS (%GTC · thấp=tệ)',valKw:['tỉ lệ gtc','%gtc','gtc']});
+  block(D.fdTotalBC,{label:'FD Total (%FD trả hàng · CAO=TỆ)',valKw:['%fd','fd'],volKw:['%vol']});
+  block(D.fdTTSBC,{label:'FD TTS (%FD trả hàng · CAO=TỆ)',valKw:['%fd','fd'],volKw:['%vol']});
+  block(D.odrBC,{label:'ODR TTS (%Ontime giao · thấp=tệ)',valKw:['%ontime','ontime']});
+  block(D.oprBC,{label:'OPR TTS (%Ontime lấy · thấp=tệ)',valKw:['%ontime','ontime']});
+  return out.length?('\n\n===== SỐ LIỆU CHI TIẾT TỪNG BƯU CỤC (kèm AM · Tỉnh · so N-7; ↑↓ = thay đổi điểm % so tuần trước) — trả lời câu hỏi theo Bưu Cục / Tỉnh / AM ====='+out.join('\n')):'';
+}catch(_){return '';}
+}
 function gatherDashboardData(){
 const D=window._D;const lines=[];
 function isoDate(d){return(d||'').match(/\d{4}-\d{2}-\d{2}/)?.[0]||'';}
@@ -4629,7 +4678,8 @@ if(gBC&&gBC.length>1){
   if(regBrief)lines.push(regBrief);
 }
 ovHRMetrics().forEach(l=>lines.push('\n'+l));
-return lines.join('\n')||'(Dữ liệu chưa được tải)';
+const bcBlk=aiBCBlock();
+return (lines.join('\n')+(bcBlk||''))||'(Dữ liệu chưa được tải)';
 }
 const AI_SYSTEM_PROMPT=`Bạn đóng vai trò là CHUYÊN GIA CỐ VẤN VẬN HÀNH LOGISTICS Vùng TNT (GHN). Nhiệm vụ: đọc dữ liệu, đưa ra nhận định chuyên sâu, cảnh báo rủi ro và khuyến nghị hành động cụ thể. CHỈ phân tích dựa trên đúng phần DỮ LIỆU được cung cấp; nếu thiếu số liệu, nói rõ KHÔNG bịa. Trả lời tiếng Việt.
 LƯU Ý: Phần "NGUỒN DỮ LIỆU AI TỰ TÌM/ĐỌC" được TÍNH TRỰC TIẾP từ sheet thô — ưu tiên dùng các con số này, đọc kỹ để hiểu ngữ cảnh từng AM/Bưu Cục trước khi nhận định, không suy diễn ngoài dữ liệu. Khi câu hỏi có chỉ số trong nháy kép (vd "GTC TTS", "FD Total"), đó là tên nguồn/sheet cần phân tích — chỉ dùng đúng phần dữ liệu khớp tên đó.
@@ -5125,33 +5175,49 @@ function aiChatToggle(){
   c.style.display=open?'flex':'none'; f.style.display=open?'none':'flex';
   if(open){ _chatLoad(); aiChatRender(); setTimeout(()=>{try{document.getElementById('aiChatInput').focus();}catch(_){}} ,120); }
 }
-function aiChatCtx(){ try{ return (typeof gatherDashboardData==='function')?String(gatherDashboardData()).slice(0,6000):''; }catch(_){ return ''; } }
-function aiChatRender(typing){
+function aiChatCtx(){ try{ return (typeof gatherDashboardData==='function')?String(gatherDashboardData()).slice(0,46000):''; }catch(_){ return ''; } }
+// Nhận biết câu PHÂN TÍCH/ĐÁNH GIÁ → dùng "bộ não" mạnh (Sonnet); câu tra cứu → Haiku (rẻ, nhanh).
+function _aiTier(q){
+  const s=' '+(q||'').toLowerCase()+' ';
+  const kw=['phân tích','phan tich','đánh giá','danh gia','vì sao','vi sao','tại sao','tai sao','nguyên nhân','nguyen nhan','so sánh','so sanh','so với','so voi','nên làm','nen lam','giải pháp','giai phap','đề xuất','de xuat','gợi ý','goi y','hành động','hanh dong','xu hướng','xu huong','nhận định','nhan dinh','tư vấn','tu van','cải thiện','cai thien','kế hoạch','ke hoach','dự báo','du bao','rủi ro','rui ro','cảnh báo','canh bao','vấn đề','van de','khắc phục','khac phuc','tối ưu','toi uu','chiến lược','chien luoc','nhận xét','nhan xet','lý do','ly do','tháng trước','thang truoc','tuần trước','tuan truoc','đánh giá','vì','làm gì','lam gi','có nên','co nen'];
+  for(let i=0;i<kw.length;i++){ if(s.indexOf(kw[i])>=0) return 'smart'; }
+  if((q||'').trim().split(/\s+/).length>=18) return 'smart';  // câu dài = thường là phân tích
+  return 'fast';
+}
+function aiChatRender(typing,tier){
   const b=document.getElementById('aiChatBody'); if(!b)return;
   let h='';
   if(!_chatMsgs.length) h+=`<div class="aiMsg bot">Chào bạn 👋 Mình là trợ lý AI của Vùng TNT.<br>Bạn hỏi gì cũng được — về số liệu vận hành trên dashboard, hay bất cứ chủ đề nào khác.</div>`;
   _chatMsgs.forEach(m=>{ const cls=m.role==='user'?'user':'bot'; const body=(m.role==='assistant'&&typeof md2html==='function')?md2html(m.content):_aiEsc(m.content); h+=`<div class="aiMsg ${cls}">${body}</div>`; });
-  if(typing) h+=`<div class="aiMsg bot typing">Đang trả lời…</div>`;
+  if(typing) h+=`<div class="aiMsg bot typing">${tier==='smart'?'🧠 Đang phân tích sâu…':'Đang trả lời…'}</div>`;
   b.innerHTML=h; b.scrollTop=b.scrollHeight;
 }
 async function aiChatSend(){
   if(_chatBusy)return;
   const inp=document.getElementById('aiChatInput'); const q=(inp.value||'').trim(); if(!q)return;
   inp.value=''; inp.style.height='auto';
-  _chatMsgs.push({role:'user',content:q}); _chatSave(); aiChatRender(true);
+  const tier=_aiTier(q); const maxTok=tier==='smart'?2600:1200;
+  _chatMsgs.push({role:'user',content:q}); _chatSave(); aiChatRender(true,tier);
   _chatBusy=true; document.getElementById('aiChatSendBtn').disabled=true;
   const key=localStorage.getItem('claudeApiKey')||'';
-  const sys='Bạn là trợ lý AI thân thiện của hệ thống báo cáo vận hành Vùng TNT (GHN). Trả lời NGẮN GỌN, rõ ràng, bằng tiếng Việt. Trả lời MỌI câu hỏi của người dùng — cả về số liệu vận hành lẫn kiến thức chung. Khi hỏi về số liệu, ưu tiên dựa vào phần "DỮ LIỆU DASHBOARD" bên dưới; nếu không có thì nói rõ.\n\n[DỮ LIỆU DASHBOARD hiện tại]\n'+aiChatCtx();
+  const sys='Bạn là CHUYÊN GIA CỐ VẤN VẬN HÀNH LOGISTICS Vùng TNT (GHN) — không chỉ tra số mà còn nhận định. Trả lời rõ ràng, đi thẳng vào việc, bằng tiếng Việt. Trả lời MỌI câu hỏi (số liệu vận hành lẫn kiến thức chung). Với câu hỏi số liệu: CHỈ dùng phần "DỮ LIỆU DASHBOARD" bên dưới; nếu thật sự không có thì nói rõ, KHÔNG bịa số.\n'
+   +'DỮ LIỆU CÓ 3 CẤP: (1) VÙNG (tổng 6 tỉnh); (2) TỈNH — xem block "Chỉ số vận hành theo vùng" (đủ 6 tỉnh: Hòa Bình, Phú Thọ, Vĩnh Phúc, Hà Nam, Nam Định, Ninh Bình); (3) AM = tên NHÂN VIÊN quản lý; (4) BƯU CỤC = điểm/kho (tên có tiền tố "(HBI)/(PTH)/(VPH)/(HNA)/(NDI)/(NBI)" hoặc "BC ..."). TUYỆT ĐỐI KHÔNG nhầm tên AM (người) thành Bưu Cục.\n'
+   +'Khi hỏi theo "bưu cục/BC/điểm/tỉnh/AM": BẮT BUỘC dùng block "SỐ LIỆU CHI TIẾT TỪNG BƯU CỤC" — mỗi dòng đã ghi sẵn [AM·Tỉnh] và cột "N-7 …↑/↓" (thay đổi so tuần trước, tính bằng điểm %). Nhờ đó bạn trả lời được: BC nào cao/thấp nhất, BC thuộc tỉnh nào, AM nào quản BC, BC nào xu hướng xấu đi/tốt lên. KHÔNG được nói "không có dữ liệu Bưu Cục/Tỉnh".\n'
+   +'THUẬT NGỮ: %GTC = tỷ lệ giao thành công; %Gán = tỷ lệ gán đơn; ODR = %giao đúng hạn (last-mile); OPR = %lấy hàng đúng hạn; %FD = tỷ lệ trả hàng (giao hỏng/hoàn); Vol = khối lượng đơn; Rớt LC = đơn rớt cam kết; Aging = đơn tồn >5 ngày; Baton = BC bất ổn; Leadtime KCT = thời gian qua kho chuyển tiếp (thấp=tốt); TTS = toàn trình thường; TTS/SME/Shopee = nhóm khách. Hậu tố "TTS" trong "GTC TTS/FD TTS/ODR TTS" là nhóm dữ liệu — chỉ dùng đúng block khớp tên nếu người hỏi nêu rõ.\n'
+   +'QUY TẮC TỐT/XẤU (không được hiểu ngược): %GTC, %Gán, %Ontime (ODR/OPR) THẤP = TỆ (cao=tốt). %FD, Aging, Rớt LC, Leadtime CAO = TỆ (thấp=tốt). So "cao nhất/thấp nhất/tệ nhất" phải theo đúng chiều này. Với %FD lưu ý cả %Vol: FD cao mà Vol rất nhỏ thì ít nghiêm trọng hơn FD cao đi kèm Vol lớn — nên nêu rõ.\n'
+   +'PHONG CÁCH: câu hỏi tra cứu thì trả lời gọn (số + 1 câu nhận định). Câu hỏi phân tích/"vì sao"/"nên làm gì" thì nêu: hiện trạng → so sánh (N-7 hoặc tỉnh khác) → nguyên nhân khả dĩ → 1-2 đề xuất hành động cụ thể gắn BC/AM.\n\n[DỮ LIỆU DASHBOARD hiện tại]\n'+aiChatCtx();
   // Chỉ gửi 10 tin gần nhất (đỡ phình token) + đảm bảo bắt đầu bằng câu của người dùng
   let msgs=_chatMsgs.slice(-10); while(msgs.length&&msgs[0].role!=='user')msgs=msgs.slice(1);
   let txt='(không có phản hồi)';
   try{
     let data=null;
     if(key){
-      const r=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'content-type':'application/json','x-api-key':key,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},body:JSON.stringify({model:'claude-haiku-4-5-20251001',max_tokens:1200,system:sys,messages:msgs})});
+      const pbody={model:tier==='smart'?'claude-sonnet-5':'claude-haiku-4-5-20251001',max_tokens:maxTok,system:sys,messages:msgs};
+      if(tier==='smart') pbody.thinking={type:'disabled'};
+      const r=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'content-type':'application/json','x-api-key':key,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},body:JSON.stringify(pbody)});
       data=await r.json();
     }else{
-      const call=async()=>{const ctrl=new AbortController();const t=setTimeout(()=>ctrl.abort(),90000);try{const r=await fetch(PROXY_URL,{method:'POST',signal:ctrl.signal,body:JSON.stringify({ai:1,stoken:window._stoken||'',token:window._authToken||'',system:sys,maxTokens:1200,messages:JSON.stringify(msgs)})});return await r.json();}catch(_){return null;}finally{clearTimeout(t);}};
+      const call=async()=>{const ctrl=new AbortController();const t=setTimeout(()=>ctrl.abort(),120000);try{const r=await fetch(PROXY_URL,{method:'POST',signal:ctrl.signal,body:JSON.stringify({ai:1,tier:tier,stoken:window._stoken||'',token:window._authToken||'',system:sys,maxTokens:maxTok,messages:JSON.stringify(msgs)})});return await r.json();}catch(_){return null;}finally{clearTimeout(t);}};
       data=await call();
     }
     if(!data) txt='⚠️ Không kết nối được máy chủ AI. Thử lại nhé.';
@@ -5159,7 +5225,7 @@ async function aiChatSend(){
     else if(data.error==='auth') txt='⚠️ Phiên đăng nhập hết hạn — tải lại trang và đăng nhập lại.';
     else if(typeof data.error==='string') txt='⚠️ '+data.error;
     else if(data.type==='error') txt='⚠️ '+((data.error&&data.error.message)||'lỗi AI');
-    else txt=(data.content&&data.content[0]&&data.content[0].text)||txt;
+    else { const tb=(data.content||[]).find(b=>b&&b.type==='text'); if(tb&&tb.text) txt=tb.text; }
   }catch(e){ txt='⚠️ Lỗi: '+e.message; }
   _chatMsgs.push({role:'assistant',content:txt}); _chatSave();
   _chatBusy=false; document.getElementById('aiChatSendBtn').disabled=false; aiChatRender();
